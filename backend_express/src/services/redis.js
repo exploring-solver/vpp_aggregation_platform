@@ -1,0 +1,93 @@
+import { createClient } from 'redis';
+import logger from '../utils/logger.js';
+
+let redisClient = null;
+let subscriberClient = null;
+
+export async function connectRedis() {
+  try {
+    // Main Redis client
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: process.env.REDIS_PORT || 6379
+      },
+      password: process.env.REDIS_PASSWORD || undefined
+    });
+
+    redisClient.on('error', (err) => logger.error('Redis Client Error:', err));
+    redisClient.on('connect', () => logger.info('Redis client connected'));
+    
+    await redisClient.connect();
+
+    // Subscriber client (separate connection for pub/sub)
+    subscriberClient = redisClient.duplicate();
+    await subscriberClient.connect();
+    
+    logger.info('Redis connections established');
+    
+    return redisClient;
+  } catch (error) {
+    logger.error('Redis connection error:', error);
+    throw error;
+  }
+}
+
+export function getRedisClient() {
+  if (!redisClient) {
+    throw new Error('Redis not initialized. Call connectRedis first.');
+  }
+  return redisClient;
+}
+
+export function getSubscriberClient() {
+  if (!subscriberClient) {
+    throw new Error('Redis subscriber not initialized.');
+  }
+  return subscriberClient;
+}
+
+// Cache helpers
+export async function cacheSet(key, value, expirySeconds = 300) {
+  const client = getRedisClient();
+  const data = typeof value === 'string' ? value : JSON.stringify(value);
+  await client.setEx(key, expirySeconds, data);
+}
+
+export async function cacheGet(key) {
+  const client = getRedisClient();
+  const data = await client.get(key);
+  if (!data) return null;
+  
+  try {
+    return JSON.parse(data);
+  } catch {
+    return data;
+  }
+}
+
+export async function cacheDel(key) {
+  const client = getRedisClient();
+  await client.del(key);
+}
+
+// Pub/Sub helpers
+export async function publishMessage(channel, message) {
+  const client = getRedisClient();
+  const data = typeof message === 'string' ? message : JSON.stringify(message);
+  await client.publish(channel, data);
+  logger.debug(`Published to ${channel}:`, message);
+}
+
+export async function subscribeChannel(channel, callback) {
+  const client = getSubscriberClient();
+  await client.subscribe(channel, (message) => {
+    try {
+      const data = JSON.parse(message);
+      callback(data);
+    } catch {
+      callback(message);
+    }
+  });
+  logger.info(`Subscribed to Redis channel: ${channel}`);
+}
