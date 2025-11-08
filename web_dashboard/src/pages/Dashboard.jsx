@@ -5,23 +5,57 @@ export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // TODO: Connect to WebSocket for real-time updates
-  // TODO: Fetch aggregate data from API
+  // Fetch aggregate data from API
+  const fetchAggregateData = async () => {
+    try {
+      const token = localStorage.getItem('token'); // JWT token for authenticated requests
+      const response = await fetch('http://localhost:3000/api/aggregate', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setAggregateData(result.data);
+      } else {
+        console.error('Failed to fetch aggregate data:', response.status);
+        // Use fallback data if API fails
+        setAggregateData({
+          total_power_kw: 0,
+          avg_soc: 0,
+          avg_freq: 50.0,
+          node_count: 0,
+          online_nodes: 0,
+          revenue_today: 0,
+          co2_saved: 0,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching aggregate data:', error);
+      // Use fallback data on error
+      setAggregateData({
+        total_power_kw: 0,
+        avg_soc: 0,
+        avg_freq: 50.0,
+        node_count: 0,
+        online_nodes: 0,
+        revenue_today: 0,
+        co2_saved: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Placeholder - implement API call
-    setTimeout(() => {
-      setAggregateData({
-        total_power_kw: 245.8,
-        avg_soc: 78.5,
-        avg_freq: 49.98,
-        node_count: 2,
-        online_nodes: 2,
-        revenue_today: 12500,
-        co2_saved: 125.5,
-      })
-      setLoading(false)
-    }, 1000)
+    fetchAggregateData();
+    
+    // Set up polling for real-time updates every 10 seconds
+    const interval = setInterval(fetchAggregateData, 10000);
+    
+    return () => clearInterval(interval);
   }, [])
 
   if (loading) {

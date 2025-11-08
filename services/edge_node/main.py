@@ -28,7 +28,7 @@ app.add_middleware(
 )
 
 # Global instances
-simulator = TelemetrySimulator(settings.DC_ID)
+simulator = TelemetrySimulator(settings.NODE_ID)
 mqtt_client = None
 
 class ControlCommand(BaseModel):
@@ -51,14 +51,14 @@ class TelemetryData(BaseModel):
 async def startup_event():
     global mqtt_client
     
-    logger.info(f"Starting Edge Node {settings.DC_ID}")
+    logger.info(f"Starting Edge Node {settings.NODE_ID} ({settings.NODE_NAME or 'Unnamed'})")
     
     # Initialize MQTT client if enabled
     if settings.MQTT_ENABLED:
         try:
             mqtt_client = MQTTClient(
                 broker_url=settings.MQTT_BROKER_URL,
-                dc_id=settings.DC_ID,
+                dc_id=settings.NODE_ID,
                 on_control_callback=handle_control_command
             )
             await mqtt_client.connect()
@@ -71,44 +71,20 @@ async def startup_event():
     # Start telemetry collection loop
     asyncio.create_task(telemetry_loop())
     logger.info("Telemetry loop started")
+    
+    # Log that we're using identifier-based M2M authentication
+    logger.info(f"M2M authentication configured for node {settings.NODE_ID} using identifier key")
 
 # -------------------------
-# Auth0 M2M token management
+# Identifier-based authentication for M2M
 # -------------------------
-import time
-_token_cache = {"access_token": None, "expires_at": 0}
 
-async def get_m2m_token():
-    """Obtain and cache a client_credentials token for posting to aggregator."""
-    import httpx
-    now = int(time.time())
-    # Return cached token if valid with 30s buffer
-    if _token_cache["access_token"] and _token_cache["expires_at"] - 30 > now:
-        return _token_cache["access_token"]
-
-    domain = settings.AUTH0_DOMAIN
-    audience = settings.AUTH0_AUDIENCE
-    client_id = settings.AUTH0_CLIENT_ID
-    client_secret = settings.AUTH0_CLIENT_SECRET
-
-    if not all([domain, audience, client_id, client_secret]):
-        raise RuntimeError(f"Auth0 env vars missing on edge node. Found: domain={domain}, audience={audience}, client_id={client_id}, client_secret={'***' if client_secret else None}")
-
-    token_url = f"https://{domain}/oauth/token"
-    payload = {
-        "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "audience": audience,
+def get_auth_headers():
+    """Get authentication headers for API requests to aggregator."""
+    return {
+        "X-Node-ID": settings.NODE_ID,
+        "X-Node-Key": settings.NODE_KEY
     }
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.post(token_url, json=payload)
-        r.raise_for_status()
-        data = r.json()
-        _token_cache["access_token"] = data["access_token"]
-        _token_cache["expires_at"] = now + int(data.get("expires_in", 3600))
-        return _token_cache["access_token"]
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -147,24 +123,14 @@ async def telemetry_loop():
         await asyncio.sleep(settings.TELEMETRY_INTERVAL)
 
 async def send_telemetry_http(telemetry: dict):
-    """Send telemetry to aggregator via HTTP with API key or Bearer token."""
+    """Send telemetry to aggregator via HTTP with identifier-based authentication."""
     import httpx
     try:
         url = f"{settings.AGGREGATOR_URL}/api/telemetry"
         logger.debug(f"Sending HTTP telemetry to {url}")
         
-        # Choose authentication method
-        headers = {}
-        if settings.USE_API_KEY_AUTH and settings.API_KEY:
-            headers["X-API-Key"] = settings.API_KEY
-        else:
-            # Fallback to JWT token
-            try:
-                token = await get_m2m_token()
-                headers["Authorization"] = f"Bearer {token}"
-            except Exception as e:
-                logger.error(f"Failed to get M2M token: {e}")
-                return
+        # Use identifier-based authentication headers
+        headers = get_auth_headers()
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -174,7 +140,7 @@ async def send_telemetry_http(telemetry: dict):
                 timeout=10.0
             )
             if response.status_code == 201:
-                logger.debug(f"HTTP telemetry sent successfully")
+                logger.debug(f"HTTP telemetry sent successfully for node {settings.NODE_ID}")
             else:
                 logger.warning(f"HTTP telemetry send failed: {response.status_code} - {response.text}")
     except httpx.ConnectError as e:
@@ -203,8 +169,12 @@ def handle_control_command(command: dict):
 def read_root():
     return {
         "service": "VPP Edge Node",
-        "dc_id": settings.DC_ID,
-        "version": "1.0.0"
+        "node_id": settings.NODE_ID,
+        "node_name": settings.NODE_NAME,
+        "node_location": settings.NODE_LOCATION,
+        "version": "1.0.0",
+        # Legacy field for backward compatibility
+        "dc_id": settings.NODE_ID
     }
 
 @app.get("/status")
@@ -213,12 +183,16 @@ def get_status():
     telemetry = simulator.generate_telemetry()
     
     return {
-        "dc_id": settings.DC_ID,
+        "node_id": settings.NODE_ID,
+        "node_name": settings.NODE_NAME,
+        "node_location": settings.NODE_LOCATION,
         "online": True,
         "telemetry": telemetry,
         "uptime_seconds": simulator.get_uptime(),
         "mqtt_enabled": settings.MQTT_ENABLED,
-        "mqtt_connected": mqtt_client.connected if mqtt_client else False
+        "mqtt_connected": mqtt_client.connected if mqtt_client else False,
+        # Legacy field for backward compatibility
+        "dc_id": settings.NODE_ID
     }
 
 @app.post("/control")
