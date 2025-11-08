@@ -4,9 +4,10 @@ import logger from '../utils/logger.js';
 
 export async function handleTelemetryData(telemetry, nodeAuth = null) {
   try {
-    // Auto-register node if authenticated via M2M and not already registered
-    if (nodeAuth?.authType === 'M2M') {
-      await ensureNodeRegistered(nodeAuth.nodeId, telemetry);
+    // Auto-register node if not already registered (works with or without auth now)
+    const nodeId = nodeAuth?.nodeId || telemetry.dc_id;
+    if (nodeId) {
+      await ensureNodeRegistered(nodeId, telemetry);
     }
 
     // Validate and enrich telemetry data
@@ -88,19 +89,27 @@ async function ensureNodeRegistered(nodeId, telemetry) {
     const collection = getCollection('nodes');
     const existingNode = await collection.findOne({ dc_id: nodeId });
     
+    // Calculate capacity from telemetry if not provided
+    const powerKw = telemetry.power_kw || 100; // Default 100 kW
+    const batteryKwh = telemetry.meta?.battery_kwh || telemetry.battery_kwh || 200; // Default 200 kWh
+    const capacityKw = Math.max(powerKw * 1.5, 150); // Capacity should be higher than current power
+    
     if (!existingNode) {
       const nodeData = {
         dc_id: nodeId,
-        node_id: nodeId, // New field
+        node_id: nodeId,
         node_name: telemetry.node_name || `Edge Node ${nodeId}`,
-        node_location: telemetry.node_location || 'Unknown',
+        node_location: telemetry.node_location || telemetry.meta?.location || 'Unknown',
         node_type: telemetry.node_type || 'edge_device',
         status: 'online',
+        capacity_kw: capacityKw,
+        battery_kwh: batteryKwh,
+        region: telemetry.region || 'default',
         created_at: new Date(),
         updated_at: new Date(),
         auto_registered: true,
         first_seen: new Date(),
-        capabilities: telemetry.capabilities || [],
+        capabilities: telemetry.capabilities || ['charge', 'discharge', 'defer_load'],
         metadata: {
           initial_telemetry: {
             power_kw: telemetry.power_kw,
@@ -111,18 +120,26 @@ async function ensureNodeRegistered(nodeId, telemetry) {
       };
       
       await collection.insertOne(nodeData);
-      logger.info(`Auto-registered new node: ${nodeId} (${nodeData.node_name})`);
+      logger.info(`Auto-registered new node: ${nodeId} (${nodeData.node_name}) with capacity ${capacityKw}kW, battery ${batteryKwh}kWh`);
     } else {
-      // Update last seen and status
+      // Update last seen, status, and capacity if missing
+      const updateData = {
+        status: 'online',
+        updated_at: new Date(),
+        last_seen: new Date()
+      };
+      
+      // Update capacity if not set or if telemetry provides better data
+      if (!existingNode.capacity_kw || (telemetry.power_kw && telemetry.power_kw > existingNode.capacity_kw * 0.8)) {
+        updateData.capacity_kw = capacityKw;
+      }
+      if (!existingNode.battery_kwh || (telemetry.meta?.battery_kwh && telemetry.meta.battery_kwh > existingNode.battery_kwh)) {
+        updateData.battery_kwh = batteryKwh;
+      }
+      
       await collection.updateOne(
         { dc_id: nodeId },
-        { 
-          $set: { 
-            status: 'online',
-            updated_at: new Date(),
-            last_seen: new Date()
-          }
-        }
+        { $set: updateData }
       );
     }
   } catch (error) {

@@ -62,9 +62,12 @@ export class DataAggregator {
       for (const node of nodes) {
         const lastState = await cacheGet(`node:${node.dc_id}:last_state`);
         
-        // Add to totals
-        vppState.total_capacity_mw += (node.capacity_kw || 0) / 1000;
-        vppState.total_battery_kwh += node.battery_kwh || 0;
+        // Add to totals - use node capacity or calculate from power if missing
+        const nodeCapacityKw = node.capacity_kw || (lastState?.power_kw ? lastState.power_kw * 1.5 : 150);
+        const nodeBatteryKwh = node.battery_kwh || (lastState?.meta?.battery_kwh || 200);
+        
+        vppState.total_capacity_mw += nodeCapacityKw / 1000;
+        vppState.total_battery_kwh += nodeBatteryKwh;
         
         if (lastState) {
           vppState.online_nodes++;

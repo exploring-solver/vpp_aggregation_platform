@@ -1,6 +1,5 @@
 import logger from '../utils/logger.js';
-import { getCollection } from '../services/database.js';
-import { authenticateSimpleToken } from './simpleAuth.js';
+import jwt from 'jsonwebtoken';
 
 // Valid node keys - in production, store these securely in database/vault
 const VALID_NODE_KEYS = new Map([
@@ -11,60 +10,61 @@ const VALID_NODE_KEYS = new Map([
   ['DC05', process.env.DC05_KEY || 'dc05-secret-key-2024'],
 ]);
 
-// Identifier-based authentication for edge nodes (M2M)
+// Identifier-based authentication for edge nodes (M2M) - Now allows all requests
 export function authenticateNodeKey(req, res, next) {
   const nodeId = req.headers['x-node-id'];
   const nodeKey = req.headers['x-node-key'];
   
-  if (!nodeId || !nodeKey) {
-    logger.warn('M2M authentication failed: Missing node ID or key headers');
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Node ID and key headers required for M2M communication'
-    });
+  // Allow all requests - set nodeAuth if headers are provided, but don't require them
+  if (nodeId && nodeKey) {
+    req.nodeAuth = {
+      nodeId,
+      authenticated: true,
+      authType: 'M2M'
+    };
+    logger.info(`Node headers provided for node ${nodeId} (auth bypassed)`);
+  } else {
+    req.nodeAuth = null;
   }
-
-  // Validate node key
-  const expectedKey = VALID_NODE_KEYS.get(nodeId);
-  if (!expectedKey || expectedKey !== nodeKey) {
-    logger.warn(`M2M authentication failed for node ${nodeId}: Invalid key`);
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Invalid node credentials'
-    });
-  }
-
-  // Successfully authenticated
-  req.nodeAuth = {
-    nodeId,
-    authenticated: true,
-    authType: 'M2M'
-  };
   
-  logger.info(`M2M authentication successful for node ${nodeId}`);
   return next();
 }
 
-// Flexible auth that accepts either JWT (for users) or Node Key (for edge nodes)
+// Flexible auth that accepts either JWT (for users) or Node Key (for edge nodes) - Now allows all requests
 export function authenticateFlexible(req, res, next) {
   const authHeader = req.headers.authorization;
   const nodeId = req.headers['x-node-id'];
   const nodeKey = req.headers['x-node-key'];
 
-  // If node credentials are provided, use node key auth (M2M)
+  // Set nodeAuth if node credentials are provided
   if (nodeId && nodeKey) {
-    return authenticateNodeKey(req, res, next);
+    req.nodeAuth = {
+      nodeId,
+      authenticated: true,
+      authType: 'M2M'
+    };
+  } else {
+    req.nodeAuth = null;
   }
 
-  // If Bearer token is provided, use JWT auth (user auth)
+  // Try to decode JWT if provided, but don't require it
   if (authHeader?.startsWith('Bearer ')) {
-    // Use simple auth middleware
-    return authenticateSimpleToken(req, res, next);
+    try {
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      const JWT_SECRET = process.env.JWT_SECRET || 'vpp-platform-secret-key-change-in-production-2024';
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.auth = decoded;
+      req.user = decoded; // For compatibility
+    } catch (error) {
+      // Token invalid, but continue anyway
+      req.auth = null;
+      req.user = null;
+    }
   } else {
-    // No auth provided
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Authentication required (JWT Bearer token or Node credentials)'
-    });
+    // No auth provided - allow anyway
+    req.auth = null;
+    req.user = null;
   }
+  
+  next();
 }

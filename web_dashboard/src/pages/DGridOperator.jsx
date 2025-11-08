@@ -12,14 +12,20 @@ export default function DGridOperator() {
   const [loading, setLoading] = useState(true)
   const [flexibilityRequest, setFlexibilityRequest] = useState({ mw: '', duration: '' })
   const [activeBids, setActiveBids] = useState([])
+  const [agentStatus, setAgentStatus] = useState(null)
+  const [agentDecisions, setAgentDecisions] = useState([])
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
     fetchAggregateData()
     fetchActiveBids()
+    fetchAgentStatus()
+    fetchAgentDecisions()
     const interval = setInterval(() => {
       fetchAggregateData()
       fetchActiveBids()
+      fetchAgentStatus()
+      fetchAgentDecisions()
     }, 10000)
     return () => clearInterval(interval)
   }, [makeApiCall])
@@ -61,6 +67,32 @@ export default function DGridOperator() {
       }
     } catch (error) {
       console.error('Error fetching active bids:', error)
+    }
+  }
+
+  const fetchAgentStatus = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/agents/status`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        setAgentStatus(result.data)
+      }
+    } catch (error) {
+      console.error('Error fetching agent status:', error)
+    }
+  }
+
+  const fetchAgentDecisions = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/agents/decisions`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        setAgentDecisions(result.data.recentDecisions || [])
+      }
+    } catch (error) {
+      console.error('Error fetching agent decisions:', error)
     }
   }
 
@@ -382,6 +414,81 @@ export default function DGridOperator() {
           </div>
         </div>
       </div>
+
+      {/* Multi-Agent System Status */}
+      {agentStatus && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <Brain className="w-5 h-5 mr-2 text-primary-600" />
+            Autonomous Multi-Agent System
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
+            {Object.entries(agentStatus.agents || {}).map(([name, status]) => (
+              <div key={name} className="card">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-900">{name}</h3>
+                  <span className={`badge ${
+                    status.status === 'idle' ? 'badge-success' :
+                    status.status === 'running' ? 'badge-info' :
+                    'badge-warning'
+                  }`}>
+                    {status.status}
+                  </span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Runs:</span>
+                    <span className="font-medium">{status.runCount || 0}</span>
+                  </div>
+                  {status.lastRun && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Last Run:</span>
+                      <span className="font-medium">
+                        {new Date(status.lastRun).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Recent Agent Decisions */}
+          {agentDecisions.length > 0 && (
+            <div className="card">
+              <h3 className="text-lg font-semibold mb-4">Recent Agent Decisions</h3>
+              <div className="space-y-3">
+                {agentDecisions.slice(-5).reverse().map((decision, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-900">
+                        {decision.decision?.action || 'No action'}
+                      </span>
+                      <span className={`badge ${
+                        decision.decision?.priority === 'high' ? 'badge-warning' :
+                        decision.decision?.priority === 'medium' ? 'badge-info' :
+                        'badge-success'
+                      }`}>
+                        {decision.decision?.priority || 'low'}
+                      </span>
+                    </div>
+                    {decision.decision?.reasoning && decision.decision.reasoning.length > 0 && (
+                      <ul className="text-sm text-gray-600 space-y-1">
+                        {decision.decision.reasoning.map((reason, rIdx) => (
+                          <li key={rIdx}>• {reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      {new Date(decision.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Impact & Savings Section */}
       <div className="mb-6">

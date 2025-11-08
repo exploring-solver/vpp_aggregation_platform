@@ -1,12 +1,11 @@
 import express from 'express';
 import marketBidding from '../services/market/marketBidding.js';
 import logger from '../utils/logger.js';
-import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/market/bids - Prepare and submit market bid (requires auth)
-router.post('/bids', optionalAuth, optionalCheckRole(['operator', 'admin']), async (req, res) => {
+// POST /api/market/bids - Prepare and submit market bid (public)
+router.post('/bids', async (req, res) => {
   try {
     const { service_type, capacity_mw, price_per_mw, duration_minutes } = req.body;
     

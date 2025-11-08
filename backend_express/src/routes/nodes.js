@@ -2,7 +2,6 @@ import express from 'express';
 import { getCollection } from '../services/database.js';
 import { cacheGet } from '../services/redis.js';
 import logger from '../utils/logger.js';
-import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -58,8 +57,8 @@ router.get('/:dc_id', async (req, res) => {
   }
 });
 
-// POST /api/nodes - Register new node (requires auth)
-router.post('/', optionalAuth, optionalCheckRole(['admin']), async (req, res) => {
+// POST /api/nodes - Register new node (public)
+router.post('/', async (req, res) => {
   try {
     const nodeData = req.body;
     
@@ -89,8 +88,8 @@ router.post('/', optionalAuth, optionalCheckRole(['admin']), async (req, res) =>
   }
 });
 
-// PUT /api/nodes/:dc_id - Update node (requires auth)
-router.put('/:dc_id', optionalAuth, optionalCheckRole(['admin']), async (req, res) => {
+// PUT /api/nodes/:dc_id - Update node (public)
+router.put('/:dc_id', async (req, res) => {
   try {
     const { dc_id } = req.params;
     const updates = req.body;
@@ -116,8 +115,8 @@ router.put('/:dc_id', optionalAuth, optionalCheckRole(['admin']), async (req, re
   }
 });
 
-// DELETE /api/nodes/:dc_id - Delete node (requires auth)
-router.delete('/:dc_id', optionalAuth, optionalCheckRole(['admin']), async (req, res) => {
+// DELETE /api/nodes/:dc_id - Delete node (public)
+router.delete('/:dc_id', async (req, res) => {
   try {
     const { dc_id } = req.params;
     const collection = getCollection('nodes');

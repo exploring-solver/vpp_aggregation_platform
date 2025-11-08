@@ -1,22 +1,71 @@
+import { useEffect, useState } from 'react'
 import { TrendingUp, Brain, Activity, AlertTriangle, Zap, Battery } from 'lucide-react'
+import { useAuthToken } from '../services/auth'
 
 export default function Forecasts() {
+  const [forecastData, setForecastData] = useState(null)
+  const [agentStatus, setAgentStatus] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const { makeApiCall } = useAuthToken()
+
+  useEffect(() => {
+    fetchForecastData()
+    fetchAgentStatus()
+    const interval = setInterval(() => {
+      fetchForecastData()
+      fetchAgentStatus()
+    }, 30000) // Update every 30 seconds
+    return () => clearInterval(interval)
+  }, [makeApiCall])
+
+  const fetchForecastData = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/forecast/load`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        setForecastData(result.data)
+      }
+    } catch (error) {
+      console.error('Error fetching forecast:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAgentStatus = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/agents/LoadForecastAgent/status`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        setAgentStatus(result.data)
+      }
+    } catch (error) {
+      console.error('Error fetching agent status:', error)
+    }
+  }
+
   const forecasts = [
     {
       type: 'Load Forecast',
-      prediction: '245.8 kW',
-      confidence: 92,
+      prediction: forecastData?.predictions?.[0]?.value 
+        ? `${forecastData.predictions[0].value.toFixed(1)} kW` 
+        : '245.8 kW',
+      confidence: agentStatus?.lastResult?.loadForecast?.confidence || 92,
       timeframe: 'Next 24h',
-      trend: 'increasing',
+      trend: forecastData?.predictions?.[0]?.value > (forecastData?.predictions?.[1]?.value || 0) ? 'increasing' : 'stable',
       icon: Zap,
       color: 'energy',
     },
     {
       type: 'Grid Stress',
-      prediction: '0.65',
+      prediction: agentStatus?.lastResult?.gridStressForecast?.current_stress_score 
+        ? agentStatus.lastResult.gridStressForecast.current_stress_score.toFixed(2)
+        : '0.65',
       confidence: 88,
       timeframe: 'Next 6h',
-      trend: 'moderate',
+      trend: agentStatus?.lastResult?.gridStressForecast?.current_stress_score > 0.7 ? 'high' : 'moderate',
       icon: Activity,
       color: 'primary',
     },
@@ -117,6 +166,44 @@ export default function Forecasts() {
           </div>
         </div>
       </div>
+
+      {/* Agent Status */}
+      {agentStatus && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
+                <Brain className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Load Forecast Agent</h3>
+                <p className="text-sm text-gray-600">Status: {agentStatus.status}</p>
+              </div>
+            </div>
+            <span className={`badge ${
+              agentStatus.status === 'idle' ? 'badge-success' : 
+              agentStatus.status === 'running' ? 'badge-info' : 'badge-warning'
+            }`}>
+              {agentStatus.status}
+            </span>
+          </div>
+          {agentStatus.lastResult?.recommendations && agentStatus.lastResult.recommendations.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">Agent Recommendations:</p>
+              {agentStatus.lastResult.recommendations.map((rec, idx) => (
+                <div key={idx} className={`p-3 rounded-lg border ${
+                  rec.severity === 'high' ? 'bg-red-50 border-red-200' :
+                  rec.severity === 'medium' ? 'bg-yellow-50 border-yellow-200' :
+                  'bg-blue-50 border-blue-200'
+                }`}>
+                  <p className="text-sm font-medium">{rec.message}</p>
+                  <p className="text-xs text-gray-600 mt-1">Action: {rec.action}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* RL Optimization */}
       <div className="card">
