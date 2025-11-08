@@ -23,24 +23,31 @@ export default function Login() {
       if (isAuthenticated && user) {
         setIsTokenLoading(true)
         try {
-          // Get the Auth0 access token
-          const token = await getAccessTokenSilently({
+          // Get the Auth0 access token for API calls
+          const accessToken = await getAccessTokenSilently({
             authorizationParams: {
               audience: import.meta.env.VITE_AUTH0_AUDIENCE,
               scope: "read:vpp write:vpp admin:vpp"
             }
           })
           
-          // Store the token in localStorage for API calls
-          localStorage.setItem('token', token)
+          // Store the access token and user info for API calls
+          localStorage.setItem('access_token', accessToken)
           localStorage.setItem('user', JSON.stringify(user))
           
-          console.log('Auth0 token stored successfully')
+          // Also store in 'token' for backward compatibility
+          localStorage.setItem('token', accessToken)
+          
+          console.log('Auth0 access token stored successfully')
+          console.log('Token type:', typeof accessToken)
+          console.log('Token length:', accessToken.length)
+          
           navigate('/')
         } catch (err) {
           console.error('Error getting access token:', err)
           setLoginError('Failed to get access token. Please try logging in again.')
           // Clear any partial auth state
+          localStorage.removeItem('access_token')
           localStorage.removeItem('token')
           localStorage.removeItem('user')
         } finally {

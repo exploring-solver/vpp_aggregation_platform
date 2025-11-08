@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, Battery, Zap, Server, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuthToken } from '../services/auth'
+import AuthDebug from '../components/AuthDebug'
 
 export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
@@ -123,6 +124,9 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* Debug Component - Remove this after testing */}
+      <AuthDebug />
+      
       {/* Error Alert */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-lg flex items-start animate-in slide-in-from-top">
