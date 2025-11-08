@@ -80,19 +80,19 @@ _token_cache = {"access_token": None, "expires_at": 0}
 
 async def get_m2m_token():
     """Obtain and cache a client_credentials token for posting to aggregator."""
-    import httpx, os
+    import httpx
     now = int(time.time())
     # Return cached token if valid with 30s buffer
     if _token_cache["access_token"] and _token_cache["expires_at"] - 30 > now:
         return _token_cache["access_token"]
 
-    domain = os.getenv("AUTH0_DOMAIN")
-    audience = os.getenv("AUTH0_AUDIENCE")
-    client_id = os.getenv("AUTH0_CLIENT_ID")
-    client_secret = os.getenv("AUTH0_CLIENT_SECRET")
+    domain = settings.AUTH0_DOMAIN
+    audience = settings.AUTH0_AUDIENCE
+    client_id = settings.AUTH0_CLIENT_ID
+    client_secret = settings.AUTH0_CLIENT_SECRET
 
     if not all([domain, audience, client_id, client_secret]):
-        raise RuntimeError("Auth0 env vars missing on edge node (AUTH0_DOMAIN, AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET)")
+        raise RuntimeError(f"Auth0 env vars missing on edge node. Found: domain={domain}, audience={audience}, client_id={client_id}, client_secret={'***' if client_secret else None}")
 
     token_url = f"https://{domain}/oauth/token"
     payload = {
