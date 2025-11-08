@@ -17,6 +17,7 @@ import forecastRoutes from './routes/forecast.js';
 import optimizationRoutes from './routes/optimization.js';
 import marketRoutes from './routes/market.js';
 import agentRoutes from './routes/agents.js';
+import sshRoutes from './routes/ssh.js';
 
 // Import services
 import { connectDB } from './services/database.js';
@@ -73,6 +74,7 @@ app.use('/api/dispatch', dispatchRoutes); // Auth handled in route with checkRol
 app.use('/api/optimization', optimizationRoutes); // Auth handled in route with checkRole
 app.use('/api/market', marketRoutes); // Auth handled in route with checkRole
 app.use('/api/agents', agentRoutes); // Multi-agent system routes
+app.use('/api/ssh', sshRoutes); // SSH access to edge machines
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -117,6 +119,14 @@ async function startServer() {
     await initMQTT();
     logger.info('MQTT client initialized');
 
+    // Check SSH encryption key
+    if (!process.env.SSH_ENCRYPTION_KEY || process.env.SSH_ENCRYPTION_KEY === 'default-key-change-in-production-32chars!!') {
+      logger.warn('⚠️  SSH_ENCRYPTION_KEY not set or using default! Run: node scripts/generate-ssh-key.js');
+      logger.warn('⚠️  SSH credentials will not be properly encrypted in production!');
+    } else {
+      logger.info('✓ SSH encryption key configured');
+    }
+
     // Start scheduled jobs
     forecastScheduler.start();
     optimizationScheduler.start();
@@ -146,6 +156,10 @@ async function startServer() {
       forecastScheduler.stop();
       optimizationScheduler.stop();
       agentScheduler.stop();
+      
+      // Close SSH connections
+      const sshManager = (await import('./services/ssh/sshManager.js')).default;
+      await sshManager.closeAllConnections();
       
       server.close(() => {
         logger.info('HTTP server closed');
