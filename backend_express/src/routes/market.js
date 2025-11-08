@@ -1,12 +1,12 @@
 import express from 'express';
 import marketBidding from '../services/market/marketBidding.js';
 import logger from '../utils/logger.js';
-import { checkRole } from '../middleware/auth.js';
+import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/market/bids - Prepare and submit market bid
-router.post('/bids', checkRole(['operator', 'admin']), async (req, res) => {
+// POST /api/market/bids - Prepare and submit market bid (requires auth)
+router.post('/bids', optionalAuth, optionalCheckRole(['operator', 'admin']), async (req, res) => {
   try {
     const { service_type, capacity_mw, price_per_mw, duration_minutes } = req.body;
     
@@ -30,7 +30,7 @@ router.post('/bids', checkRole(['operator', 'admin']), async (req, res) => {
   }
 });
 
-// GET /api/market/bids - Get active bids
+// GET /api/market/bids - Get active bids (public read)
 router.get('/bids', async (req, res) => {
   try {
     const bids = await marketBidding.getActiveBids();

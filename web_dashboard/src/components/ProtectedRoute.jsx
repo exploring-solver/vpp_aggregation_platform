@@ -1,9 +1,10 @@
-import { Navigate } from 'react-router-dom'
-import { useAuthToken } from '../services/auth'
+import { useAuth0 } from '@auth0/auth0-react'
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isTokenReady, isLoading, tokenError } = useAuthToken()
+  const { isLoading } = useAuth0()
 
+  // Allow access without authentication - auth is optional for viewing
+  // Write operations will require auth at the API level
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -15,9 +16,6 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  if (!isAuthenticated || !isTokenReady) {
-    return <Navigate to="/login" replace />
-  }
-
+  // Allow access - authentication is optional for viewing dashboard
   return children
 }

@@ -2,11 +2,11 @@ import express from 'express';
 import rlOptimizer from '../services/optimization/rlOptimizer.js';
 import dispatchOptimizer from '../services/optimization/dispatchOptimizer.js';
 import logger from '../utils/logger.js';
-import { checkRole } from '../middleware/auth.js';
+import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// GET /api/optimization/recommendation - Get RL optimization recommendation
+// GET /api/optimization/recommendation - Get RL optimization recommendation (public read)
 router.get('/recommendation', async (req, res) => {
   try {
     const recommendation = await rlOptimizer.getOptimalAction();
@@ -17,8 +17,8 @@ router.get('/recommendation', async (req, res) => {
   }
 });
 
-// POST /api/optimization/dispatch - Optimize and execute dispatch
-router.post('/dispatch', checkRole(['operator', 'admin']), async (req, res) => {
+// POST /api/optimization/dispatch - Optimize and execute dispatch (requires auth)
+router.post('/dispatch', optionalAuth, optionalCheckRole(['operator', 'admin']), async (req, res) => {
   try {
     const { auto_execute = false } = req.body;
     const result = await dispatchOptimizer.optimizeAndDispatch(auto_execute === true);
@@ -29,7 +29,7 @@ router.post('/dispatch', checkRole(['operator', 'admin']), async (req, res) => {
   }
 });
 
-// GET /api/optimization/dispatch/plan - Get dispatch plan without executing
+// GET /api/optimization/dispatch/plan - Get dispatch plan without executing (public read)
 router.get('/dispatch/plan', async (req, res) => {
   try {
     const result = await dispatchOptimizer.optimizeAndDispatch(false);

@@ -1,116 +1,84 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback } from 'react'
+import { useAuth0 } from '@auth0/auth0-react'
 
-// Simple hook for making authenticated API calls with JWT tokens
+// Simple hook for making authenticated API calls with Auth0
 export const useAuthToken = () => {
-  const [isTokenReady, setIsTokenReady] = useState(false)
-  const [tokenError, setTokenError] = useState(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-
-  // Check if we have a valid token
-  useEffect(() => {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
-    const user = localStorage.getItem('user')
-    
-    if (token && user) {
-      try {
-        // Basic token validation - check if it's a JWT
-        const parts = token.split('.')
-        if (parts.length === 3) {
-          // Decode to check expiration (basic check)
-          const payload = JSON.parse(atob(parts[1]))
-          const currentTime = Date.now() / 1000
-          
-          if (payload.exp && payload.exp > currentTime) {
-            setIsTokenReady(true)
-            setIsAuthenticated(true)
-            setTokenError(null)
-          } else {
-            // Token expired
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            setIsTokenReady(false)
-            setIsAuthenticated(false)
-            setTokenError('Token expired')
-          }
-        } else {
-          // Not a JWT, assume it's valid
-          setIsTokenReady(true)
-          setIsAuthenticated(true)
-          setTokenError(null)
-        }
-      } catch (error) {
-        console.error('Error validating token:', error)
-        setIsTokenReady(false)
-        setIsAuthenticated(false)
-        setTokenError('Invalid token')
-      }
-    } else {
-      setIsTokenReady(false)
-      setIsAuthenticated(false)
-      setTokenError('No token found')
-    }
-  }, [])
+  const { getAccessTokenSilently, isAuthenticated, logout: auth0Logout } = useAuth0()
 
   const makeApiCall = useCallback(async (url, options = {}) => {
-    if (!isAuthenticated || !isTokenReady) {
-      throw new Error('User not authenticated. Please login.')
-    }
-
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+    // For GET requests, try without auth first (public read routes)
+    const isReadRequest = !options.method || options.method === 'GET'
     
-    if (!token) {
-      throw new Error('No token found. Please login again.')
-    }
-
     try {
-      // Make the request with the token
+      let token = null
+      
+      // Try to get token if authenticated (for write operations or if available)
+      if (isAuthenticated) {
+        try {
+          token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+              scope: "read:vpp write:vpp admin:vpp"
+            }
+          })
+        } catch (tokenError) {
+          // If token fetch fails but it's a read request, continue without token
+          if (!isReadRequest) {
+            throw tokenError
+          }
+        }
+      }
+
+      // Make the request
       const config = {
         ...options,
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           ...options.headers
         }
       }
 
+      // Add auth header only if we have a token
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`
+      }
+
       const response = await fetch(url, config)
       
-      if (response.status === 401) {
-        // Token expired or invalid
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        setIsTokenReady(false)
-        setIsAuthenticated(false)
-        
-        // Redirect to login
-        window.location.href = '/login'
-        throw new Error('Session expired, please login again')
+      // For write operations, 401 means auth is required
+      if (response.status === 401 && !isReadRequest) {
+        if (isAuthenticated) {
+          auth0Logout({ logoutParams: { returnTo: window.location.origin } })
+        }
+        throw new Error('Authentication required for this operation')
       }
       
       return response
     } catch (error) {
       console.error('API call error:', error)
+      
+      // Handle Auth0 errors
+      if (error.error === 'login_required' || error.error === 'consent_required') {
+        if (isAuthenticated) {
+          auth0Logout({ logoutParams: { returnTo: window.location.origin } })
+        }
+        throw new Error('Please login again')
+      }
+      
       throw error
     }
-  }, [isAuthenticated, isTokenReady])
+  }, [getAccessTokenSilently, isAuthenticated, auth0Logout])
 
   const logout = useCallback(() => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setIsTokenReady(false)
-    setIsAuthenticated(false)
-    window.location.href = '/login'
-  }, [])
+    auth0Logout({ logoutParams: { returnTo: window.location.origin } })
+  }, [auth0Logout])
 
   return {
     makeApiCall,
     isAuthenticated,
     isLoading: false,
-    isTokenReady,
-    tokenError,
+    isTokenReady: isAuthenticated,
+    tokenError: null,
     logout
   }
 }

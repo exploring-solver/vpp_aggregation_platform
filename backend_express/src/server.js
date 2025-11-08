@@ -63,13 +63,15 @@ app.use('/api/auth', authRoutes);
 // Protected routes - telemetry uses flexible auth (API key or JWT)
 app.use('/api/telemetry', authenticateFlexible, telemetryRoutes);
 
-// Protected routes with JWT authentication
-app.use('/api/dispatch', authenticateToken, dispatchRoutes);
-app.use('/api/nodes', authenticateToken, nodesRoutes);
-app.use('/api/aggregate', authenticateToken, aggregateRoutes);
-app.use('/api/forecast', authenticateToken, forecastRoutes);
-app.use('/api/optimization', authenticateToken, optimizationRoutes);
-app.use('/api/market', authenticateToken, marketRoutes);
+// Public read-only routes (for monitoring/dashboard - no auth required)
+app.use('/api/aggregate', aggregateRoutes);
+app.use('/api/nodes', nodesRoutes);
+app.use('/api/forecast', forecastRoutes);
+
+// Protected write routes (require authentication for modifications)
+app.use('/api/dispatch', dispatchRoutes); // Auth handled in route with checkRole
+app.use('/api/optimization', optimizationRoutes); // Auth handled in route with checkRole
+app.use('/api/market', marketRoutes); // Auth handled in route with checkRole
 
 // Error handling middleware
 app.use((err, req, res, next) => {

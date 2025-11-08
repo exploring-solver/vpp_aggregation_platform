@@ -6,15 +6,13 @@ export default function Nodes() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { makeApiCall, isTokenReady } = useAuthToken()
+  const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
-    if (isTokenReady) {
-      fetchNodes()
-      const interval = setInterval(fetchNodes, 15000)
-      return () => clearInterval(interval)
-    }
-  }, [makeApiCall, isTokenReady])
+    fetchNodes()
+    const interval = setInterval(fetchNodes, 15000)
+    return () => clearInterval(interval)
+  }, [makeApiCall])
 
   const fetchNodes = async () => {
     try {

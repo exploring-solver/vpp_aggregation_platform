@@ -9,107 +9,20 @@ export default function Login() {
     isAuthenticated, 
     error, 
     isLoading, 
-    getAccessTokenSilently,
     user 
   } = useAuth0()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [loginError, setLoginError] = useState(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
-  const [isTokenLoading, setIsTokenLoading] = useState(false)
 
   useEffect(() => {
-    const handleAuthentication = async () => {
-      if (isAuthenticated && user) {
-        setIsTokenLoading(true)
-        console.log('User authenticated, getting access token...', {
-          isAuthenticated,
-          user: user.email || user.sub
-        })
-        
-        try {
-          // Get the Auth0 access token for API calls with retry logic
-          let accessToken = null
-          let retryCount = 0
-          const maxRetries = 3
-          
-          while (!accessToken && retryCount < maxRetries) {
-            try {
-              console.log(`Attempting to get token (attempt ${retryCount + 1}/${maxRetries})...`)
-              accessToken = await getAccessTokenSilently({
-                authorizationParams: {
-                  audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-                  scope: "read:vpp write:vpp admin:vpp"
-                },
-                cacheMode: 'off', // Force fresh token request
-                timeoutInSeconds: 60 // Increase timeout
-              })
-              
-              if (accessToken) {
-                console.log('Successfully got access token:', {
-                  tokenLength: accessToken.length,
-                  tokenStart: accessToken.substring(0, 50) + '...'
-                })
-                break
-              }
-            } catch (tokenError) {
-              console.error(`Token request attempt ${retryCount + 1} failed:`, tokenError)
-              retryCount++
-              
-              if (retryCount < maxRetries) {
-                // Wait before retry
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
-              } else {
-                throw tokenError
-              }
-            }
-          }
-          
-          if (!accessToken) {
-            throw new Error('Failed to get access token after multiple attempts')
-          }
-          
-          // Store the access token and user info for API calls
-          localStorage.setItem('access_token', accessToken)
-          localStorage.setItem('user', JSON.stringify(user))
-          localStorage.setItem('token', accessToken) // Backward compatibility
-          
-          console.log('Token stored successfully in localStorage')
-          
-          // Wait a bit to ensure storage is complete
-          await new Promise(resolve => setTimeout(resolve, 100))
-          
-          // Verify token was stored
-          const storedToken = localStorage.getItem('access_token')
-          if (!storedToken) {
-            throw new Error('Failed to store token in localStorage')
-          }
-          
-          console.log('Token verification successful, navigating to dashboard...')
-          navigate('/')
-        } catch (err) {
-          console.error('Error getting access token:', err)
-          setLoginError(`Failed to get access token: ${err.message}. Please try logging in again.`)
-          // Clear any partial auth state
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-        } finally {
-          setIsTokenLoading(false)
-        }
-      }
-    }
-
-    // Only run if we haven't successfully stored a token yet
-    const existingToken = localStorage.getItem('access_token')
-    if (!existingToken) {
-      handleAuthentication()
-    } else if (isAuthenticated && user) {
-      // We already have a token and user is authenticated, navigate directly
-      console.log('Token already exists, navigating directly')
+    // If authenticated, redirect to dashboard
+    if (isAuthenticated && user) {
+      // Simple redirect - Auth0 handles token management
       navigate('/')
     }
-  }, [isAuthenticated, user, getAccessTokenSilently, navigate])
+  }, [isAuthenticated, user, navigate])
 
   useEffect(() => {
     // Check for error in URL params (from Auth0 callback)
@@ -146,18 +59,16 @@ export default function Login() {
     }
   }
 
-  if (isLoading || isRedirecting || isTokenLoading) {
+  if (isLoading || isRedirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-600 border-t-transparent mx-auto"></div>
           <p className="mt-6 text-lg font-medium text-gray-700">
-            {isRedirecting ? 'Redirecting to secure login...' : 
-             isTokenLoading ? 'Securing your session...' : 'Loading...'}
+            {isRedirecting ? 'Redirecting to secure login...' : 'Loading...'}
           </p>
           <p className="mt-2 text-sm text-gray-500">
-            {isTokenLoading ? 'Getting your access token...' : 
-             'Please wait while we prepare your secure authentication'}
+            Please wait while we prepare your secure authentication
           </p>
         </div>
       </div>

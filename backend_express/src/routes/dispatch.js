@@ -3,12 +3,12 @@ import { getCollection } from '../services/database.js';
 import { publishToNode } from '../services/mqtt.js';
 import { publishMessage } from '../services/redis.js';
 import logger from '../utils/logger.js';
-import { checkRole } from '../middleware/auth.js';
+import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/dispatch - Dispatch command to edge nodes
-router.post('/', checkRole(['operator', 'admin']), async (req, res) => {
+// POST /api/dispatch - Dispatch command to edge nodes (requires auth)
+router.post('/', optionalAuth, optionalCheckRole(['operator', 'admin']), async (req, res) => {
   try {
     const { targets, action, params = {} } = req.body;
     
@@ -77,7 +77,7 @@ router.post('/', checkRole(['operator', 'admin']), async (req, res) => {
   }
 });
 
-// GET /api/dispatch/logs - Get dispatch history
+// GET /api/dispatch/logs - Get dispatch history (public read)
 router.get('/logs', async (req, res) => {
   try {
     const { dc_id, limit = 50, status } = req.query;
