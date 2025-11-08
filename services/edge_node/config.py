@@ -1,40 +1,38 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
 
+
 class Settings(BaseSettings):
-    # Node Identity
-    DC_ID: str = "DC01"
-    
+    # Node Identity - Used for identifier-based authentication
+    NODE_ID: str = Field(..., description="Unique node identifier (e.g., DC01, DC02)")
+    NODE_NAME: str = Field("", description="Human-readable node name")
+    NODE_KEY: str = Field(..., description="Secret key for authenticating this node with the aggregator")
+    NODE_LOCATION: str = Field("", description="Geographic location of this node")
+
+    # Legacy field for backward compatibility (maps to NODE_ID)
+    @property
+    def DC_ID(self):
+        return self.NODE_ID
+
     # Server
     PORT: int = 8000
-    
+
     # MQTT Configuration
     MQTT_ENABLED: bool = True
     MQTT_BROKER_URL: str = "mqtt://localhost:1883"
     MQTT_USERNAME: Optional[str] = None
     MQTT_PASSWORD: Optional[str] = None
-    
-    # HTTP Aggregator (fallback or alternative to MQTT)
-    AGGREGATOR_URL: Optional[str] = "http://localhost:3000"
-    
-    # Authentication Configuration
-    # Option 1: Simple API Key (recommended for M2M)
-    API_KEY: Optional[str] = "vpp-edge-node-key-2024"
-    
-    # Option 2: Auth0 Configuration (for M2M token authentication)
-    AUTH0_DOMAIN: Optional[str] = None
-    AUTH0_AUDIENCE: Optional[str] = None
-    AUTH0_CLIENT_ID: Optional[str] = None
-    AUTH0_CLIENT_SECRET: Optional[str] = None
-    
-    # Authentication Method
-    USE_API_KEY_AUTH: bool = True  # Set to False to use Auth0 JWT
-    
+
+    # HTTP Aggregator
+    AGGREGATOR_URL: str = "http://localhost:3000"
+
     # Telemetry
     TELEMETRY_INTERVAL: int = 5  # seconds
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+
 
 settings = Settings()

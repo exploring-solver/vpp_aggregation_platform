@@ -91,6 +91,14 @@ router.get('/', async (req, res) => {
       aggregateData.avg_freq < 49.8 ? 'low' :
       aggregateData.avg_freq > 50.2 ? 'high' : 'normal';
     
+    // Calculate revenue and environmental impact (approximate)
+    const pricePerKwh = 5; // ₹5 per kWh
+    const hoursPerDay = 24;
+    const co2PerKwh = 0.82; // kg CO2 per kWh
+    
+    aggregateData.revenue_today = Math.round(aggregateData.total_power_kw * hoursPerDay * pricePerKwh);
+    aggregateData.co2_saved = parseFloat((aggregateData.total_power_kw * hoursPerDay * co2PerKwh / 1000).toFixed(1)); // Convert to tonnes
+    
     // Cache result for 10 seconds
     await cacheSet(cacheKey, aggregateData, 10);
     

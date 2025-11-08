@@ -13,7 +13,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'dc_id is required' });
     }
     
-    const result = await handleTelemetryData(telemetry);
+    // Pass authentication info for auto-registration
+    const result = await handleTelemetryData(telemetry, req.nodeAuth);
     res.status(201).json({ success: true, data: result });
   } catch (error) {
     logger.error('Error processing telemetry:', error);

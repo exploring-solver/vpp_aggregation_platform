@@ -2,8 +2,13 @@ import { getCollection } from './database.js';
 import { publishMessage, cacheSet } from './redis.js';
 import logger from '../utils/logger.js';
 
-export async function handleTelemetryData(telemetry) {
+export async function handleTelemetryData(telemetry, nodeAuth = null) {
   try {
+    // Auto-register node if authenticated via M2M and not already registered
+    if (nodeAuth?.authType === 'M2M') {
+      await ensureNodeRegistered(nodeAuth.nodeId, telemetry);
+    }
+
     // Validate and enrich telemetry data
     const enrichedData = {
       ...telemetry,
@@ -75,4 +80,53 @@ export async function getTelemetryInRange(dcId, startTime, endTime) {
     .find(query)
     .sort({ timestamp: 1 })
     .toArray();
+}
+
+// Auto-register nodes when they first send telemetry
+async function ensureNodeRegistered(nodeId, telemetry) {
+  try {
+    const collection = getCollection('nodes');
+    const existingNode = await collection.findOne({ dc_id: nodeId });
+    
+    if (!existingNode) {
+      const nodeData = {
+        dc_id: nodeId,
+        node_id: nodeId, // New field
+        node_name: telemetry.node_name || `Edge Node ${nodeId}`,
+        node_location: telemetry.node_location || 'Unknown',
+        node_type: telemetry.node_type || 'edge_device',
+        status: 'online',
+        created_at: new Date(),
+        updated_at: new Date(),
+        auto_registered: true,
+        first_seen: new Date(),
+        capabilities: telemetry.capabilities || [],
+        metadata: {
+          initial_telemetry: {
+            power_kw: telemetry.power_kw,
+            soc: telemetry.soc,
+            freq: telemetry.freq
+          }
+        }
+      };
+      
+      await collection.insertOne(nodeData);
+      logger.info(`Auto-registered new node: ${nodeId} (${nodeData.node_name})`);
+    } else {
+      // Update last seen and status
+      await collection.updateOne(
+        { dc_id: nodeId },
+        { 
+          $set: { 
+            status: 'online',
+            updated_at: new Date(),
+            last_seen: new Date()
+          }
+        }
+      );
+    }
+  } catch (error) {
+    logger.error(`Failed to ensure node ${nodeId} registration:`, error);
+    // Don't throw - telemetry processing should continue even if registration fails
+  }
 }
