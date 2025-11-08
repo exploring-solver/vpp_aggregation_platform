@@ -156,38 +156,86 @@ router.put('/:dcId/config', async (req, res) => {
     }
     
     // Encrypt sensitive fields
-    const encryptedConfig = { ...ssh_config };
+    const encryptedConfig = {
+      host: ssh_config.host,
+      port: ssh_config.port,
+      username: ssh_config.username
+    };
     
-    // Only encrypt password if it's provided and not already encrypted
+    // Handle password authentication
     if (ssh_config.password && ssh_config.password !== '••••••••') {
       encryptedConfig.password = sshManager.encryptPassword(ssh_config.password);
       encryptedConfig.password_encrypted = true;
     } else if (ssh_config.password === '••••••••') {
-      // Keep existing encrypted password
-      delete encryptedConfig.password;
+      // Keep existing encrypted password from database
+      if (node.ssh_config && node.ssh_config.password) {
+        encryptedConfig.password = node.ssh_config.password;
+        encryptedConfig.password_encrypted = node.ssh_config.password_encrypted || true;
+      }
     }
     
-    // Encrypt private key (PEM file content)
-    if (ssh_config.private_key) {
-      encryptedConfig.private_key = sshManager.encryptPassword(ssh_config.private_key);
+    // Handle private key authentication
+    if (ssh_config.private_key && ssh_config.private_key.trim()) {
+      encryptedConfig.private_key = sshManager.encryptPassword(ssh_config.private_key.trim());
       encryptedConfig.private_key_encrypted = true;
+      
+      // Encrypt passphrase if provided
+      if (ssh_config.passphrase && ssh_config.passphrase.trim()) {
+        encryptedConfig.passphrase = sshManager.encryptPassword(ssh_config.passphrase.trim());
+        encryptedConfig.passphrase_encrypted = true;
+      }
+      
+      // Clear password when using private key
+      delete encryptedConfig.password;
+      delete encryptedConfig.password_encrypted;
+    } else if (ssh_config.usePrivateKey === false || !ssh_config.private_key) {
+      // Clear private key when using password
+      delete encryptedConfig.private_key;
+      delete encryptedConfig.private_key_encrypted;
+      delete encryptedConfig.passphrase;
+      delete encryptedConfig.passphrase_encrypted;
     }
     
-    // Encrypt passphrase if provided
-    if (ssh_config.passphrase) {
-      encryptedConfig.passphrase = sshManager.encryptPassword(ssh_config.passphrase);
-      encryptedConfig.passphrase_encrypted = true;
+    // Ensure we have at least one authentication method
+    if (!encryptedConfig.password && !encryptedConfig.private_key) {
+      return res.status(400).json({ error: 'Either password or private key must be provided' });
     }
     
-    await nodesCollection.updateOne(
+    const updateResult = await nodesCollection.updateOne(
       { dc_id: dcId },
       { $set: { ssh_config: encryptedConfig, updated_at: new Date() } }
     );
     
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ error: 'Node not found' });
+    }
+    
+    if (updateResult.modifiedCount === 0) {
+      logger.warn(`SSH config update for ${dcId} resulted in no changes`);
+    }
+    
     // Close existing connection if any
     await sshManager.closeConnection(dcId);
     
-    res.json({ success: true, message: 'SSH configuration updated' });
+    // Verify the config was saved
+    const updatedNode = await nodesCollection.findOne({ dc_id: dcId });
+    if (!updatedNode || !updatedNode.ssh_config) {
+      logger.error(`SSH config was not saved for ${dcId}. Node exists: ${!!updatedNode}`);
+      return res.status(500).json({ error: 'Failed to save SSH configuration. Please try again.' });
+    }
+    
+    logger.info(`SSH configuration updated for ${dcId}: host=${encryptedConfig.host}, username=${encryptedConfig.username}, has_key=${!!encryptedConfig.private_key}, has_password=${!!encryptedConfig.password}`);
+    res.json({ 
+      success: true, 
+      message: 'SSH configuration updated',
+      data: {
+        host: encryptedConfig.host,
+        port: encryptedConfig.port,
+        username: encryptedConfig.username,
+        has_private_key: !!encryptedConfig.private_key,
+        has_password: !!encryptedConfig.password
+      }
+    });
   } catch (error) {
     logger.error(`Error updating SSH config for ${dcId}:`, error);
     res.status(500).json({ error: error.message || 'Failed to update SSH config' });
