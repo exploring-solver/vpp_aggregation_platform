@@ -31,67 +31,28 @@ router.get('/', async (req, res) => {
       nodes: vppState.nodes
     };
     
-    let socSum = 0;
-    let freqSum = 0;
+    // Calculate average load factor from nodes
     let loadSum = 0;
-    let validNodes = 0;
-    
-    for (const node of nodes) {
-      const lastState = await cacheGet(`node:${node.dc_id}:last_state`);
-      
-      aggregateData.total_capacity_kw += node.capacity_kw || 0;
-      aggregateData.total_battery_kwh += node.battery_kwh || 0;
-      
-      if (lastState) {
-        aggregateData.online_nodes++;
-        aggregateData.total_power_kw += lastState.power_kw || 0;
-        
-        if (lastState.soc !== undefined) {
-          socSum += lastState.soc;
-          validNodes++;
+    let loadCount = 0;
+    if (vppState.nodes && vppState.nodes.length > 0) {
+      vppState.nodes.forEach(node => {
+        if (node.load_factor !== undefined) {
+          loadSum += node.load_factor;
+          loadCount++;
         }
-        if (lastState.freq !== undefined) {
-          freqSum += lastState.freq;
-        }
-        if (lastState.load_factor !== undefined) {
-          loadSum += lastState.load_factor;
-        }
-        
-        aggregateData.nodes.push({
-          dc_id: node.dc_id,
-          location: node.location,
-          power_kw: lastState.power_kw,
-          soc: lastState.soc,
-          freq: lastState.freq,
-          timestamp: lastState.timestamp
-        });
+      });
+      if (loadCount > 0) {
+        aggregateData.avg_load_factor = loadSum / loadCount;
       }
     }
     
-    if (validNodes > 0) {
-      aggregateData.avg_soc = socSum / validNodes;
-      aggregateData.avg_freq = freqSum / validNodes;
-      aggregateData.avg_load_factor = loadSum / validNodes;
-    }
-    
-    // Frequency status
-    aggregateData.freq_status = 
-      aggregateData.avg_freq < 49.8 ? 'low' :
-      aggregateData.avg_freq > 50.2 ? 'high' : 'normal';
-    
     // Calculate revenue and environmental impact (approximate)
-    const pricePerKwh = 5; // ₹5 per kWh
+    const pricePerKwh = parseFloat(process.env.PRICE_PER_KWH || '5'); // ₹5 per kWh default
     const hoursPerDay = 24;
-    const co2PerKwh = 0.82; // kg CO2 per kWh
+    const co2PerKwh = parseFloat(process.env.CO2_PER_KWH || '0.82'); // kg CO2 per kWh default
     
     aggregateData.revenue_today = Math.round(aggregateData.total_power_kw * hoursPerDay * pricePerKwh);
     aggregateData.co2_saved = parseFloat((aggregateData.total_power_kw * hoursPerDay * co2PerKwh / 1000).toFixed(1)); // Convert to tonnes
-    
-    // Cache result for 10 seconds
-    await cacheSet(cacheKey, aggregateData, 10);
-    
-    // Publish update to Redis
-    await publishMessage('aggregate:update', aggregateData);
     
     res.json({ success: true, cached: false, data: aggregateData });
   } catch (error) {
@@ -115,3 +76,4 @@ router.get('/vpp-state', async (req, res) => {
 });
 
 export default router;
+

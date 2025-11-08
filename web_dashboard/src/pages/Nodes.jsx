@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Server, CheckCircle2, AlertCircle, Battery, Zap, Activity } from 'lucide-react'
+import { useAuthToken } from '../services/auth'
 
 export default function Nodes() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const { makeApiCall } = useAuthToken()
 
   const fetchNodes = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('http://154.201.127.96:3000/api/nodes', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/nodes`
+      const response = await makeApiCall(apiUrl)
       
       if (response.ok) {
         const result = await response.json()

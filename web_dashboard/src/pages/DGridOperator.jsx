@@ -5,48 +5,64 @@ import {
   AlertCircle, CheckCircle2, XCircle, Send, Check, X,
   Leaf, Shield
 } from 'lucide-react'
+import { useAuthToken } from '../services/auth'
 
 export default function DGridOperator() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [flexibilityRequest, setFlexibilityRequest] = useState({ mw: '', duration: '' })
+  const [activeBids, setActiveBids] = useState([])
+  const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
-    // TODO: Connect to WebSocket for real-time updates
-    // TODO: Fetch grid operator data from API
-    setTimeout(() => {
-      setData({
-        // Real-Time Grid Flexibility View
-        totalAggregatedVPPCapacity: 245.8,
-        activeParticipants: 12,
-        availableReserve: 180.5,
-        committedReserve: 65.3,
-        
-        // Frequency & Load Monitoring
-        gridFrequency: 49.98,
-        areaControlError: 0.02,
-        realTimePowerFlowBalance: 245.8,
-        frequencyTrend: [],
-        
-        // Ancillary Market Interface
-        activeBids: [
-          { id: 1, service: 'SRAS', capacity: '50 MW', price: '₹2,500/MW', status: 'Active', responseTime: '150ms' },
-          { id: 2, service: 'TRAS', capacity: '30 MW', price: '₹3,200/MW', status: 'Active', responseTime: '120ms' }
-        ],
-        clearingPrices: {
-          sras: 2500,
-          tras: 3200
-        },
-        avgResponseTime: 135,
-        
-        // Impact & Savings
-        co2EmissionsReduced: 125.5,
-        costAvoidedVsPeaker: 450000,
-        reliabilityScore: 0.98
-      })
+    fetchAggregateData()
+    fetchActiveBids()
+    const interval = setInterval(() => {
+      fetchAggregateData()
+      fetchActiveBids()
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [makeApiCall])
+
+  const fetchAggregateData = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/aggregate`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        const agg = result.data
+        setData({
+          totalAggregatedVPPCapacity: (agg.total_capacity_kw || 0) / 1000,
+          activeParticipants: agg.online_nodes || 0,
+          availableReserve: agg.available_reserve_mw || 0,
+          committedReserve: agg.committed_reserve_mw || 0,
+          gridFrequency: agg.avg_freq || 50.0,
+          areaControlError: 0.02, // TODO: Calculate from actual data
+          realTimePowerFlowBalance: (agg.total_power_kw || 0) / 1000,
+          co2EmissionsReduced: agg.co2_saved || 0,
+          costAvoidedVsPeaker: agg.revenue_today || 0,
+          reliabilityScore: 0.98 // TODO: Calculate from actual data
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching aggregate data:', error)
+    } finally {
       setLoading(false)
-    }, 1000)
-  }, [])
+    }
+  }
+
+  const fetchActiveBids = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/market/bids`
+      const response = await makeApiCall(apiUrl)
+      if (response.ok) {
+        const result = await response.json()
+        setActiveBids(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching active bids:', error)
+    }
+  }
 
   if (loading) {
     return (
@@ -56,26 +72,73 @@ export default function DGridOperator() {
     )
   }
 
-  const handleSendFlexibilityRequest = () => {
-    // TODO: Implement API call to send flexibility request
-    console.log('Sending flexibility request:', flexibilityRequest)
-    alert(`Flexibility request sent: ${flexibilityRequest.mw} MW for ${flexibilityRequest.duration} minutes`)
+  const handleSendFlexibilityRequest = async () => {
+    if (!flexibilityRequest.mw || !flexibilityRequest.duration) {
+      alert('Please enter both capacity and duration')
+      return
+    }
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/dispatch`
+      const response = await makeApiCall(apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          targets: 'all',
+          action: 'discharge',
+          params: {
+            power_kw: parseFloat(flexibilityRequest.mw) * 1000,
+            duration_minutes: parseInt(flexibilityRequest.duration)
+          }
+        })
+      })
+      if (response.ok) {
+        alert(`Flexibility request sent: ${flexibilityRequest.mw} MW for ${flexibilityRequest.duration} minutes`)
+        setFlexibilityRequest({ mw: '', duration: '' })
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error || 'Failed to send request'}`)
+      }
+    } catch (error) {
+      console.error('Error sending flexibility request:', error)
+      alert('Failed to send flexibility request')
+    }
   }
 
   const handleApproveBid = (bidId) => {
     // TODO: Implement API call to approve bid
     console.log('Approving bid:', bidId)
+    alert('Bid approval functionality coming soon')
   }
 
   const handleRejectBid = (bidId) => {
     // TODO: Implement API call to reject bid
     console.log('Rejecting bid:', bidId)
+    alert('Bid rejection functionality coming soon')
   }
 
-  const handleTriggerDREvent = () => {
-    // TODO: Implement API call to trigger DR event
-    console.log('Triggering DR event')
-    alert('Demand Response event triggered')
+  const handleTriggerDREvent = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/dispatch`
+      const response = await makeApiCall(apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          targets: 'all',
+          action: 'defer_load',
+          params: {
+            power_kw: 100, // Default DR event
+            duration_minutes: 30
+          }
+        })
+      })
+      if (response.ok) {
+        alert('Demand Response event triggered')
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error || 'Failed to trigger DR event'}`)
+      }
+    } catch (error) {
+      console.error('Error triggering DR event:', error)
+      alert('Failed to trigger DR event')
+    }
   }
 
   return (
@@ -98,20 +161,20 @@ export default function DGridOperator() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card">
             <p className="text-sm font-medium text-gray-600 mb-1">Total Aggregated VPP Capacity</p>
-            <p className="text-3xl font-bold text-gray-900">{data.totalAggregatedVPPCapacity} MW</p>
+            <p className="text-3xl font-bold text-gray-900">{data?.totalAggregatedVPPCapacity?.toFixed(1) || 0} MW</p>
           </div>
           <div className="card">
             <p className="text-sm font-medium text-gray-600 mb-1">Active Participants</p>
-            <p className="text-3xl font-bold text-gray-900">{data.activeParticipants}</p>
+            <p className="text-3xl font-bold text-gray-900">{data?.activeParticipants || 0}</p>
             <p className="text-xs text-gray-500 mt-1">Data centers</p>
           </div>
           <div className="card">
             <p className="text-sm font-medium text-gray-600 mb-1">Available Reserve</p>
-            <p className="text-3xl font-bold text-green-600">{data.availableReserve} MW</p>
+            <p className="text-3xl font-bold text-green-600">{data?.availableReserve?.toFixed(1) || 0} MW</p>
           </div>
           <div className="card">
             <p className="text-sm font-medium text-gray-600 mb-1">Committed Reserve</p>
-            <p className="text-3xl font-bold text-blue-600">{data.committedReserve} MW</p>
+            <p className="text-3xl font-bold text-blue-600">{data?.committedReserve?.toFixed(1) || 0} MW</p>
           </div>
         </div>
       </div>
@@ -131,15 +194,15 @@ export default function DGridOperator() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Current Frequency</p>
-                <p className="text-2xl font-bold text-gray-900">{data.gridFrequency} Hz</p>
+                <p className="text-2xl font-bold text-gray-900">{data?.gridFrequency?.toFixed(2) || 50.0} Hz</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Area Control Error</p>
-                <p className="text-2xl font-bold text-gray-900">{data.areaControlError}</p>
+                <p className="text-2xl font-bold text-gray-900">{data?.areaControlError?.toFixed(2) || 0.02}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Power Flow Balance</p>
-                <p className="text-2xl font-bold text-gray-900">{data.realTimePowerFlowBalance} MW</p>
+                <p className="text-2xl font-bold text-gray-900">{data?.realTimePowerFlowBalance?.toFixed(1) || 0} MW</p>
               </div>
             </div>
           </div>
@@ -159,7 +222,7 @@ export default function DGridOperator() {
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center">
                   <Activity className="w-5 h-5 text-blue-600 mr-2" />
-                  <span className="text-sm font-medium">ACE: {data.areaControlError}</span>
+                  <span className="text-sm font-medium">ACE: {data?.areaControlError?.toFixed(2) || 0.02}</span>
                 </div>
                 <span className="badge badge-info">Within Limits</span>
               </div>
@@ -178,29 +241,39 @@ export default function DGridOperator() {
           <div className="card lg:col-span-2">
             <h3 className="text-lg font-semibold mb-4">Active Bids</h3>
             <div className="space-y-3">
-              {data.activeBids.map((bid) => (
-                <div key={bid.id} className="border border-gray-200 rounded-lg p-4">
+              {activeBids.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No active bids</p>
+                </div>
+              ) : (
+                activeBids.map((bid) => (
+                <div key={bid.bid_id || bid.id} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <div className="flex items-center mb-2">
-                        <span className="badge badge-info mr-2">{bid.service}</span>
-                        <span className="text-sm font-medium text-gray-900">{bid.capacity}</span>
+                        <span className="badge badge-info mr-2">{bid.service_type || 'N/A'}</span>
+                        <span className="text-sm font-medium text-gray-900">{bid.capacity_mw || 0} MW</span>
                       </div>
-                      <p className="text-sm text-gray-600">Price: {bid.price}</p>
-                      <p className="text-xs text-gray-500 mt-1">Response Time: {bid.responseTime}</p>
+                      <p className="text-sm text-gray-600">Price: ₹{bid.price_per_mw || 0}/MW</p>
+                      <p className="text-xs text-gray-500 mt-1">Duration: {bid.duration_minutes || 0} min</p>
                     </div>
-                    <span className="badge badge-success">{bid.status}</span>
+                    <span className={`badge ${
+                      bid.status === 'active' ? 'badge-success' : 'badge-info'
+                    }`}>
+                      {bid.status || 'pending'}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => handleApproveBid(bid.id)}
+                      onClick={() => handleApproveBid(bid.bid_id || bid.id)}
                       className="btn btn-primary flex-1 text-sm"
                     >
                       <Check className="w-4 h-4 mr-1" />
                       Approve
                     </button>
                     <button 
-                      onClick={() => handleRejectBid(bid.id)}
+                      onClick={() => handleRejectBid(bid.bid_id || bid.id)}
                       className="btn btn-secondary flex-1 text-sm"
                     >
                       <X className="w-4 h-4 mr-1" />
@@ -208,28 +281,29 @@ export default function DGridOperator() {
                     </button>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Market Summary</h3>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Clearing Prices</p>
+                <p className="text-sm text-gray-600 mb-1">Market Summary</p>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm">SRAS</span>
-                    <span className="font-semibold">₹{data.clearingPrices.sras.toLocaleString()}/MW</span>
+                    <span className="text-sm">Active Bids</span>
+                    <span className="font-semibold">{activeBids.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm">TRAS</span>
-                    <span className="font-semibold">₹{data.clearingPrices.tras.toLocaleString()}/MW</span>
+                    <span className="text-sm">Total Capacity</span>
+                    <span className="font-semibold">{data?.totalAggregatedVPPCapacity?.toFixed(1) || 0} MW</span>
                   </div>
                 </div>
               </div>
               <div className="pt-4 border-t">
-                <p className="text-sm text-gray-600 mb-1">Average Response Time</p>
-                <p className="text-2xl font-bold text-gray-900">{data.avgResponseTime} ms</p>
+                <p className="text-sm text-gray-600 mb-1">Available Reserve</p>
+                <p className="text-2xl font-bold text-green-600">{data?.availableReserve?.toFixed(1) || 0} MW</p>
               </div>
               <div className="pt-4 border-t">
                 <p className="text-sm text-gray-600 mb-1">Historical Performance</p>
@@ -321,15 +395,15 @@ export default function DGridOperator() {
               <Leaf className="w-6 h-6 text-green-600 mr-2" />
               <h3 className="text-lg font-semibold text-gray-900">CO₂ Emissions Reduced</h3>
             </div>
-            <p className="text-3xl font-bold text-green-600 mb-1">{data.co2EmissionsReduced} tCO₂</p>
+            <p className="text-3xl font-bold text-green-600 mb-1">{data?.co2EmissionsReduced?.toFixed(1) || 0} tCO₂</p>
             <p className="text-sm text-gray-500">Per day</p>
           </div>
           <div className="card">
             <div className="flex items-center mb-3">
               <DollarSign className="w-6 h-6 text-blue-600 mr-2" />
-              <h3 className="text-lg font-semibold text-gray-900">Cost Avoided vs Peaker Plants</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Revenue Today</h3>
             </div>
-            <p className="text-3xl font-bold text-blue-600 mb-1">₹{data.costAvoidedVsPeaker.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-blue-600 mb-1">₹{data?.costAvoidedVsPeaker?.toLocaleString() || 0}</p>
             <p className="text-sm text-gray-500">Per day</p>
           </div>
           <div className="card">
@@ -337,7 +411,7 @@ export default function DGridOperator() {
               <Shield className="w-6 h-6 text-purple-600 mr-2" />
               <h3 className="text-lg font-semibold text-gray-900">Reliability Score</h3>
             </div>
-            <p className="text-3xl font-bold text-purple-600 mb-1">{(data.reliabilityScore * 100).toFixed(0)}%</p>
+            <p className="text-3xl font-bold text-purple-600 mb-1">{(data?.reliabilityScore * 100 || 98).toFixed(0)}%</p>
             <p className="text-sm text-gray-500">System reliability</p>
           </div>
         </div>

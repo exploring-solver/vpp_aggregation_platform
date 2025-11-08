@@ -62,18 +62,14 @@ app.use('/api/auth', authRoutes);
 
 // Protected routes - telemetry uses flexible auth (API key or JWT)
 app.use('/api/telemetry', authenticateFlexible, telemetryRoutes);
-app.use('/api/dispatch', dispatchRoutes);
-app.use('/api/nodes', nodesRoutes);
-app.use('/api/aggregate', aggregateRoutes);
-app.use('/api/forecast', forecastRoutes);
-app.use('/api/optimization', optimizationRoutes);
-app.use('/api/market', marketRoutes);
-// app.use('/api/dispatch', authenticateToken, dispatchRoutes);
-// app.use('/api/nodes', authenticateToken, nodesRoutes);
-// app.use('/api/aggregate', authenticateToken, aggregateRoutes);
-// app.use('/api/forecast', authenticateToken, forecastRoutes);
-// app.use('/api/optimization', authenticateToken, optimizationRoutes);
-// app.use('/api/market', authenticateToken, marketRoutes);
+
+// Protected routes with JWT authentication
+app.use('/api/dispatch', authenticateToken, dispatchRoutes);
+app.use('/api/nodes', authenticateToken, nodesRoutes);
+app.use('/api/aggregate', authenticateToken, aggregateRoutes);
+app.use('/api/forecast', authenticateToken, forecastRoutes);
+app.use('/api/optimization', authenticateToken, optimizationRoutes);
+app.use('/api/market', authenticateToken, marketRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

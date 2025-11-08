@@ -4,17 +4,32 @@ import { useAuthToken } from '../services/auth'
 
 export default function AuthDebug() {
   const { user, isAuthenticated, getAccessTokenSilently } = useAuth0()
-  const { getStoredToken, makeApiCall } = useAuthToken()
+  const { makeApiCall } = useAuthToken()
   const [debugInfo, setDebugInfo] = useState({})
+  const [tokenPreview, setTokenPreview] = useState('None')
 
   useEffect(() => {
-    const updateDebugInfo = () => {
-      const token = getStoredToken()
+    const updateDebugInfo = async () => {
+      let token = 'None'
+      if (isAuthenticated) {
+        try {
+          const accessToken = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+              scope: "read:vpp write:vpp admin:vpp"
+            }
+          })
+          token = accessToken.substring(0, 50) + '...'
+          setTokenPreview(token)
+        } catch (error) {
+          token = 'Error getting token'
+        }
+      }
+      
       setDebugInfo({
         isAuthenticated,
         hasUser: !!user,
-        hasStoredToken: !!token,
-        tokenPreview: token ? token.substring(0, 50) + '...' : 'None',
+        tokenPreview: token,
         userInfo: user ? {
           email: user.email,
           name: user.name,
@@ -24,7 +39,7 @@ export default function AuthDebug() {
     }
 
     updateDebugInfo()
-  }, [isAuthenticated, user, getStoredToken])
+  }, [isAuthenticated, user])
 
   const testApiCall = async () => {
     try {
