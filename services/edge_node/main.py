@@ -13,7 +13,7 @@ from mqtt_client import MQTTClient
 from config import settings
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VPP Edge Node", version="1.0.0")
@@ -80,17 +80,28 @@ async def shutdown_event():
 
 async def telemetry_loop():
     """Background task to collect and publish telemetry"""
+    http_failure_count = 0
+    max_http_failures = 5
+    
     while True:
         try:
             telemetry = simulator.generate_telemetry()
+            logger.debug(f"Generated telemetry: {telemetry}")
             
             # Publish via MQTT if enabled
             if mqtt_client and settings.MQTT_ENABLED:
                 await mqtt_client.publish_telemetry(telemetry)
             
             # Also send via HTTP if aggregator URL is configured
-            if settings.AGGREGATOR_URL:
-                await send_telemetry_http(telemetry)
+            if settings.AGGREGATOR_URL and http_failure_count < max_http_failures:
+                try:
+                    await send_telemetry_http(telemetry)
+                    http_failure_count = 0  # Reset on success
+                except Exception as e:
+                    http_failure_count += 1
+                    if http_failure_count >= max_http_failures:
+                        logger.warning(f"HTTP telemetry disabled after {max_http_failures} consecutive failures. Check aggregator at {settings.AGGREGATOR_URL}")
+                    raise
                 
         except Exception as e:
             logger.error(f"Error in telemetry loop: {e}")
@@ -101,16 +112,26 @@ async def send_telemetry_http(telemetry: dict):
     """Send telemetry to aggregator via HTTP"""
     import httpx
     try:
+        url = f"{settings.AGGREGATOR_URL}/api/telemetry"
+        logger.debug(f"Sending HTTP telemetry to {url}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{settings.AGGREGATOR_URL}/api/telemetry",
+                url,
                 json=telemetry,
-                timeout=5.0
+                timeout=10.0  # Increased timeout
             )
-            if response.status_code != 201:
-                logger.warning(f"HTTP telemetry send failed: {response.status_code}")
+            if response.status_code == 201:
+                logger.debug(f"HTTP telemetry sent successfully")
+            else:
+                logger.warning(f"HTTP telemetry send failed: {response.status_code} - {response.text}")
+    except httpx.ConnectError as e:
+        logger.error(f"HTTP telemetry connection failed to {settings.AGGREGATOR_URL}: {e}")
+    except httpx.TimeoutException as e:
+        logger.error(f"HTTP telemetry timeout to {settings.AGGREGATOR_URL}: {e}")
     except Exception as e:
         logger.error(f"Error sending HTTP telemetry: {e}")
+        logger.debug(f"Full exception:", exc_info=True)
 
 def handle_control_command(command: dict):
     """Handle control commands from aggregator"""
