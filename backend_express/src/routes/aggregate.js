@@ -1,6 +1,5 @@
 import express from 'express';
-import { getCollection } from '../services/database.js';
-import { cacheGet, cacheSet, publishMessage } from '../services/redis.js';
+import dataAggregator from '../services/aggregation/dataAggregator.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -10,37 +9,26 @@ router.get('/', async (req, res) => {
   try {
     const { region, nodeIds } = req.query;
     
-    // Check cache first
-    const cacheKey = `aggregate:${region || 'all'}:${nodeIds || 'all'}`;
-    const cached = await cacheGet(cacheKey);
+    // Use enhanced Data Aggregator
+    const nodeIdsArray = nodeIds ? (Array.isArray(nodeIds) ? nodeIds : nodeIds.split(',')) : null;
+    const vppState = await dataAggregator.getVirtualPlantState(region, nodeIdsArray);
     
-    if (cached) {
-      return res.json({ success: true, cached: true, data: cached });
-    }
-    
-    // Get all nodes
-    const nodesCollection = getCollection('nodes');
-    let query = {};
-    
-    if (nodeIds) {
-      const ids = Array.isArray(nodeIds) ? nodeIds : nodeIds.split(',');
-      query.dc_id = { $in: ids };
-    }
-    
-    const nodes = await nodesCollection.find(query).toArray();
-    
-    // Get latest telemetry for each node
+    // Convert to legacy format for backward compatibility
     const aggregateData = {
-      timestamp: new Date().toISOString(),
-      node_count: nodes.length,
-      total_capacity_kw: 0,
-      total_battery_kwh: 0,
-      total_power_kw: 0,
-      avg_soc: 0,
-      avg_freq: 0,
-      avg_load_factor: 0,
-      online_nodes: 0,
-      nodes: []
+      timestamp: vppState.timestamp,
+      node_count: vppState.node_count,
+      total_capacity_kw: vppState.total_capacity_mw * 1000,
+      total_battery_kwh: vppState.total_battery_kwh,
+      total_power_kw: vppState.total_power_kw,
+      avg_soc: vppState.avg_soc,
+      avg_freq: vppState.avg_frequency,
+      online_nodes: vppState.online_nodes,
+      freq_status: vppState.freq_status,
+      // Enhanced fields
+      available_reserve_mw: vppState.available_reserve_mw,
+      committed_reserve_mw: vppState.committed_reserve_mw,
+      location_flexibility: vppState.location_flexibility,
+      nodes: vppState.nodes
     };
     
     let socSum = 0;
@@ -109,6 +97,20 @@ router.get('/', async (req, res) => {
   } catch (error) {
     logger.error('Error computing aggregate:', error);
     res.status(500).json({ error: 'Failed to compute aggregate' });
+  }
+});
+
+// GET /api/aggregate/vpp-state - Get full Virtual Plant State (enhanced)
+router.get('/vpp-state', async (req, res) => {
+  try {
+    const { region, nodeIds } = req.query;
+    const nodeIdsArray = nodeIds ? (Array.isArray(nodeIds) ? nodeIds : nodeIds.split(',')) : null;
+    
+    const vppState = await dataAggregator.getVirtualPlantState(region, nodeIdsArray);
+    res.json({ success: true, data: vppState });
+  } catch (error) {
+    logger.error('Error getting VPP state:', error);
+    res.status(500).json({ error: 'Failed to get VPP state' });
   }
 });
 

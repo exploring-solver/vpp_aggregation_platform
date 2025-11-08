@@ -30,10 +30,20 @@ async function createIndexes() {
   
   // Nodes collection indexes
   await db.collection('nodes').createIndex({ dc_id: 1 }, { unique: true });
+  await db.collection('nodes').createIndex({ region: 1 });
+  await db.collection('nodes').createIndex({ location: 1 });
   
   // Dispatch log indexes
   await db.collection('dispatch_log').createIndex({ dc_id: 1, timestamp: -1 });
   await db.collection('dispatch_log').createIndex({ timestamp: -1 });
+  await db.collection('dispatch_log').createIndex({ status: 1 });
+  await db.collection('dispatch_log').createIndex({ optimization_id: 1 });
+  
+  // Market bids indexes
+  await db.collection('market_bids').createIndex({ bid_id: 1 }, { unique: true });
+  await db.collection('market_bids').createIndex({ status: 1, created_at: -1 });
+  await db.collection('market_bids').createIndex({ service_type: 1 });
+  await db.collection('market_bids').createIndex({ created_at: -1 });
   
   // Users collection indexes
   await db.collection('users').createIndex({ auth0_id: 1 }, { unique: true });
