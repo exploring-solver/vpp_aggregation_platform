@@ -55,13 +55,18 @@ async def startup_event():
     
     # Initialize MQTT client if enabled
     if settings.MQTT_ENABLED:
-        mqtt_client = MQTTClient(
-            broker_url=settings.MQTT_BROKER_URL,
-            dc_id=settings.DC_ID,
-            on_control_callback=handle_control_command
-        )
-        await mqtt_client.connect()
-        logger.info("MQTT client connected")
+        try:
+            mqtt_client = MQTTClient(
+                broker_url=settings.MQTT_BROKER_URL,
+                dc_id=settings.DC_ID,
+                on_control_callback=handle_control_command
+            )
+            await mqtt_client.connect()
+            logger.info("MQTT client connected successfully")
+        except Exception as e:
+            logger.error(f"MQTT connection failed: {e}")
+            logger.warning("Continuing without MQTT - edge node will use HTTP-only mode")
+            mqtt_client = None
     
     # Start telemetry collection loop
     asyncio.create_task(telemetry_loop())
