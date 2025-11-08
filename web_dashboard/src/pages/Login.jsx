@@ -22,30 +22,74 @@ export default function Login() {
     const handleAuthentication = async () => {
       if (isAuthenticated && user) {
         setIsTokenLoading(true)
+        console.log('User authenticated, getting access token...', {
+          isAuthenticated,
+          user: user.email || user.sub
+        })
+        
         try {
-          // Get the Auth0 access token for API calls
-          const accessToken = await getAccessTokenSilently({
-            authorizationParams: {
-              audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-              scope: "read:vpp write:vpp admin:vpp"
+          // Get the Auth0 access token for API calls with retry logic
+          let accessToken = null
+          let retryCount = 0
+          const maxRetries = 3
+          
+          while (!accessToken && retryCount < maxRetries) {
+            try {
+              console.log(`Attempting to get token (attempt ${retryCount + 1}/${maxRetries})...`)
+              accessToken = await getAccessTokenSilently({
+                authorizationParams: {
+                  audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+                  scope: "read:vpp write:vpp admin:vpp"
+                },
+                cacheMode: 'off', // Force fresh token request
+                timeoutInSeconds: 60 // Increase timeout
+              })
+              
+              if (accessToken) {
+                console.log('Successfully got access token:', {
+                  tokenLength: accessToken.length,
+                  tokenStart: accessToken.substring(0, 50) + '...'
+                })
+                break
+              }
+            } catch (tokenError) {
+              console.error(`Token request attempt ${retryCount + 1} failed:`, tokenError)
+              retryCount++
+              
+              if (retryCount < maxRetries) {
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+              } else {
+                throw tokenError
+              }
             }
-          })
+          }
+          
+          if (!accessToken) {
+            throw new Error('Failed to get access token after multiple attempts')
+          }
           
           // Store the access token and user info for API calls
           localStorage.setItem('access_token', accessToken)
           localStorage.setItem('user', JSON.stringify(user))
+          localStorage.setItem('token', accessToken) // Backward compatibility
           
-          // Also store in 'token' for backward compatibility
-          localStorage.setItem('token', accessToken)
+          console.log('Token stored successfully in localStorage')
           
-          console.log('Auth0 access token stored successfully')
-          console.log('Token type:', typeof accessToken)
-          console.log('Token length:', accessToken.length)
+          // Wait a bit to ensure storage is complete
+          await new Promise(resolve => setTimeout(resolve, 100))
           
+          // Verify token was stored
+          const storedToken = localStorage.getItem('access_token')
+          if (!storedToken) {
+            throw new Error('Failed to store token in localStorage')
+          }
+          
+          console.log('Token verification successful, navigating to dashboard...')
           navigate('/')
         } catch (err) {
           console.error('Error getting access token:', err)
-          setLoginError('Failed to get access token. Please try logging in again.')
+          setLoginError(`Failed to get access token: ${err.message}. Please try logging in again.`)
           // Clear any partial auth state
           localStorage.removeItem('access_token')
           localStorage.removeItem('token')
@@ -56,7 +100,15 @@ export default function Login() {
       }
     }
 
-    handleAuthentication()
+    // Only run if we haven't successfully stored a token yet
+    const existingToken = localStorage.getItem('access_token')
+    if (!existingToken) {
+      handleAuthentication()
+    } else if (isAuthenticated && user) {
+      // We already have a token and user is authenticated, navigate directly
+      console.log('Token already exists, navigating directly')
+      navigate('/')
+    }
   }, [isAuthenticated, user, getAccessTokenSilently, navigate])
 
   useEffect(() => {

@@ -1,19 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Activity, Battery, Zap, Server, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { useAuthToken } from '../services/auth'
-import AuthDebug from '../components/AuthDebug'
+// import { useAuthToken } from '../services/auth'
+// import AuthDebug from '../components/AuthDebug'
 
 export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { makeApiCall } = useAuthToken()
+  // const { makeApiCall } = useAuthToken()
+
+  console.log('Dashboard: Component mounted/re-rendered')
 
   // Fetch aggregate data from API
   const fetchAggregateData = async () => {
     try {
       setError(null)
+      console.log('Dashboard: Starting API call...')
+      
+      // Verify token is available
+      const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token')
+      console.log('Dashboard: Token available:', !!storedToken)
+      if (storedToken) {
+        console.log('Dashboard: Token preview:', storedToken.substring(0, 50) + '...')
+      }
+      
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/aggregate`
+      console.log('Dashboard: Making API call to:', apiUrl)
+      
       const response = await makeApiCall(apiUrl)
       
       if (response.ok) {
@@ -125,7 +138,7 @@ export default function Dashboard() {
   return (
     <div>
       {/* Debug Component - Remove this after testing */}
-      <AuthDebug />
+      {/* <AuthDebug /> */}
       
       {/* Error Alert */}
       {error && (

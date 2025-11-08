@@ -31,9 +31,7 @@ function App() {
       <Route
         path="/"
         element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
+          <Layout />
         }
       >
         <Route index element={<Dashboard />} />
