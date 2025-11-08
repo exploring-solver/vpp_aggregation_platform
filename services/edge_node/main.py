@@ -72,6 +72,44 @@ async def startup_event():
     asyncio.create_task(telemetry_loop())
     logger.info("Telemetry loop started")
 
+# -------------------------
+# Auth0 M2M token management
+# -------------------------
+import time
+_token_cache = {"access_token": None, "expires_at": 0}
+
+async def get_m2m_token():
+    """Obtain and cache a client_credentials token for posting to aggregator."""
+    import httpx, os
+    now = int(time.time())
+    # Return cached token if valid with 30s buffer
+    if _token_cache["access_token"] and _token_cache["expires_at"] - 30 > now:
+        return _token_cache["access_token"]
+
+    domain = os.getenv("AUTH0_DOMAIN")
+    audience = os.getenv("AUTH0_AUDIENCE")
+    client_id = os.getenv("AUTH0_CLIENT_ID")
+    client_secret = os.getenv("AUTH0_CLIENT_SECRET")
+
+    if not all([domain, audience, client_id, client_secret]):
+        raise RuntimeError("Auth0 env vars missing on edge node (AUTH0_DOMAIN, AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET)")
+
+    token_url = f"https://{domain}/oauth/token"
+    payload = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "audience": audience,
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.post(token_url, json=payload)
+        r.raise_for_status()
+        data = r.json()
+        _token_cache["access_token"] = data["access_token"]
+        _token_cache["expires_at"] = now + int(data.get("expires_in", 3600))
+        return _token_cache["access_token"]
+
 @app.on_event("shutdown")
 async def shutdown_event():
     if mqtt_client:
@@ -109,17 +147,20 @@ async def telemetry_loop():
         await asyncio.sleep(settings.TELEMETRY_INTERVAL)
 
 async def send_telemetry_http(telemetry: dict):
-    """Send telemetry to aggregator via HTTP"""
+    """Send telemetry to aggregator via HTTP with Bearer token."""
     import httpx
     try:
         url = f"{settings.AGGREGATOR_URL}/api/telemetry"
         logger.debug(f"Sending HTTP telemetry to {url}")
+        # Obtain M2M token (cached)
+        token = await get_m2m_token()
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 json=telemetry,
-                timeout=10.0  # Increased timeout
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
             )
             if response.status_code == 201:
                 logger.debug(f"HTTP telemetry sent successfully")
