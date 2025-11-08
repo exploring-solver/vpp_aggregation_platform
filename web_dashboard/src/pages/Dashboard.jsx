@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Activity, Battery, Zap, Server, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useAuthToken } from '../services/auth'
 
 export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { makeApiCall } = useAuthToken()
 
   // Fetch aggregate data from API
   const fetchAggregateData = async () => {
     try {
-      const token = localStorage.getItem('token'); // JWT token for authenticated requests
-      const response = await fetch('http://localhost:3000/api/aggregate', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      setError(null)
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/aggregate`
+      const response = await makeApiCall(apiUrl)
       
       if (response.ok) {
-        const result = await response.json();
-        setAggregateData(result.data);
+        const result = await response.json()
+        setAggregateData(result.data)
       } else {
-        console.error('Failed to fetch aggregate data:', response.status);
+        const errorData = await response.json()
+        console.error('API Error:', errorData)
+        setError(`API Error: ${errorData.message || response.status}`)
         // Use fallback data if API fails
         setAggregateData({
           total_power_kw: 0,
@@ -30,10 +31,11 @@ export default function Dashboard() {
           online_nodes: 0,
           revenue_today: 0,
           co2_saved: 0,
-        });
+        })
       }
     } catch (error) {
-      console.error('Error fetching aggregate data:', error);
+      console.error('Error fetching aggregate data:', error)
+      setError(`Network Error: ${error.message}`)
       // Use fallback data on error
       setAggregateData({
         total_power_kw: 0,
@@ -43,11 +45,11 @@ export default function Dashboard() {
         online_nodes: 0,
         revenue_today: 0,
         co2_saved: 0,
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
     fetchAggregateData();
@@ -121,6 +123,17 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-lg flex items-start animate-in slide-in-from-top">
+          <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Connection Error</p>
+            <p className="text-xs text-red-600 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="page-header">
         <div className="flex items-center justify-between">

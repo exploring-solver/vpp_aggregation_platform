@@ -4,17 +4,53 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Zap, AlertCircle, Shield, Lock, ArrowRight } from 'lucide-react'
 
 export default function Login() {
-  const { loginWithRedirect, isAuthenticated, error, isLoading } = useAuth0()
+  const { 
+    loginWithRedirect, 
+    isAuthenticated, 
+    error, 
+    isLoading, 
+    getAccessTokenSilently,
+    user 
+  } = useAuth0()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [loginError, setLoginError] = useState(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [isTokenLoading, setIsTokenLoading] = useState(false)
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/')
+    const handleAuthentication = async () => {
+      if (isAuthenticated && user) {
+        setIsTokenLoading(true)
+        try {
+          // Get the Auth0 access token
+          const token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+              scope: "read:vpp write:vpp admin:vpp"
+            }
+          })
+          
+          // Store the token in localStorage for API calls
+          localStorage.setItem('token', token)
+          localStorage.setItem('user', JSON.stringify(user))
+          
+          console.log('Auth0 token stored successfully')
+          navigate('/')
+        } catch (err) {
+          console.error('Error getting access token:', err)
+          setLoginError('Failed to get access token. Please try logging in again.')
+          // Clear any partial auth state
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+        } finally {
+          setIsTokenLoading(false)
+        }
+      }
     }
-  }, [isAuthenticated, navigate])
+
+    handleAuthentication()
+  }, [isAuthenticated, user, getAccessTokenSilently, navigate])
 
   useEffect(() => {
     // Check for error in URL params (from Auth0 callback)
@@ -39,6 +75,8 @@ export default function Login() {
           returnTo: '/',
         },
         authorizationParams: {
+          audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+          scope: "read:vpp write:vpp admin:vpp",
           screen_hint: 'login',
         },
       })
@@ -49,16 +87,18 @@ export default function Login() {
     }
   }
 
-  if (isLoading || isRedirecting) {
+  if (isLoading || isRedirecting || isTokenLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-600 border-t-transparent mx-auto"></div>
           <p className="mt-6 text-lg font-medium text-gray-700">
-            {isRedirecting ? 'Redirecting to secure login...' : 'Loading...'}
+            {isRedirecting ? 'Redirecting to secure login...' : 
+             isTokenLoading ? 'Securing your session...' : 'Loading...'}
           </p>
           <p className="mt-2 text-sm text-gray-500">
-            Please wait while we prepare your secure authentication
+            {isTokenLoading ? 'Getting your access token...' : 
+             'Please wait while we prepare your secure authentication'}
           </p>
         </div>
       </div>

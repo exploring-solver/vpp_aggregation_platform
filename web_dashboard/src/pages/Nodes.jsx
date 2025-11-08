@@ -9,7 +9,7 @@ export default function Nodes() {
   const fetchNodes = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:3000/api/nodes', {
+      const response = await fetch('http://154.201.127.96:3000/api/nodes', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
