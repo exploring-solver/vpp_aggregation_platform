@@ -17,11 +17,18 @@ class Settings(BaseSettings):
     # HTTP Aggregator (fallback or alternative to MQTT)
     AGGREGATOR_URL: Optional[str] = "http://localhost:3000"
     
-    # Auth0 Configuration (for M2M token authentication)
+    # Authentication Configuration
+    # Option 1: Simple API Key (recommended for M2M)
+    API_KEY: Optional[str] = "vpp-edge-node-key-2024"
+    
+    # Option 2: Auth0 Configuration (for M2M token authentication)
     AUTH0_DOMAIN: Optional[str] = None
     AUTH0_AUDIENCE: Optional[str] = None
     AUTH0_CLIENT_ID: Optional[str] = None
     AUTH0_CLIENT_SECRET: Optional[str] = None
+    
+    # Authentication Method
+    USE_API_KEY_AUTH: bool = True  # Set to False to use Auth0 JWT
     
     # Telemetry
     TELEMETRY_INTERVAL: int = 5  # seconds

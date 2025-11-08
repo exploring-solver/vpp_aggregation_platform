@@ -80,19 +80,19 @@ _token_cache = {"access_token": None, "expires_at": 0}
 
 async def get_m2m_token():
     """Obtain and cache a client_credentials token for posting to aggregator."""
-    import httpx, os
+    import httpx
     now = int(time.time())
     # Return cached token if valid with 30s buffer
     if _token_cache["access_token"] and _token_cache["expires_at"] - 30 > now:
         return _token_cache["access_token"]
 
-    domain = os.getenv("AUTH0_DOMAIN")
-    audience = os.getenv("AUTH0_AUDIENCE")
-    client_id = os.getenv("AUTH0_CLIENT_ID")
-    client_secret = os.getenv("AUTH0_CLIENT_SECRET")
+    domain = settings.AUTH0_DOMAIN
+    audience = settings.AUTH0_AUDIENCE
+    client_id = settings.AUTH0_CLIENT_ID
+    client_secret = settings.AUTH0_CLIENT_SECRET
 
     if not all([domain, audience, client_id, client_secret]):
-        raise RuntimeError("Auth0 env vars missing on edge node (AUTH0_DOMAIN, AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET)")
+        raise RuntimeError(f"Auth0 env vars missing on edge node. Found: domain={domain}, audience={audience}, client_id={client_id}, client_secret={'***' if client_secret else None}")
 
     token_url = f"https://{domain}/oauth/token"
     payload = {
@@ -147,19 +147,30 @@ async def telemetry_loop():
         await asyncio.sleep(settings.TELEMETRY_INTERVAL)
 
 async def send_telemetry_http(telemetry: dict):
-    """Send telemetry to aggregator via HTTP with Bearer token."""
+    """Send telemetry to aggregator via HTTP with API key or Bearer token."""
     import httpx
     try:
         url = f"{settings.AGGREGATOR_URL}/api/telemetry"
         logger.debug(f"Sending HTTP telemetry to {url}")
-        # Obtain M2M token (cached)
-        token = await get_m2m_token()
+        
+        # Choose authentication method
+        headers = {}
+        if settings.USE_API_KEY_AUTH and settings.API_KEY:
+            headers["X-API-Key"] = settings.API_KEY
+        else:
+            # Fallback to JWT token
+            try:
+                token = await get_m2m_token()
+                headers["Authorization"] = f"Bearer {token}"
+            except Exception as e:
+                logger.error(f"Failed to get M2M token: {e}")
+                return
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 json=telemetry,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
                 timeout=10.0
             )
             if response.status_code == 201:
