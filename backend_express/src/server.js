@@ -30,10 +30,7 @@ const WS_PORT = process.env.WS_PORT || 3001;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
-}));
+app.use(cors());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
