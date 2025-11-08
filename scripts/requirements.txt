@@ -1,0 +1,20 @@
+# ============================================================================
+# IoT Module 1 - Edge Integration Layer
+# Python Dependencies
+# ============================================================================
+
+# Core Dependencies (Required)
+# ----------------------------------------------------------------------------
+websockets==12.0              # WebSocket client and server
+psutil==5.9.8                 # System and process utilities for metrics
+asyncio                       # Async I/O (built-in, listed for clarity)
+
+# Data Handling & Serialization
+# ----------------------------------------------------------------------------
+python-dateutil==2.8.2        # Date/time parsing utilities
+pytz==2024.1                  # Timezone support
+
+# Configuration Management
+# ----------------------------------------------------------------------------
+python-dotenv==1.0.0          # Environment variable management
+configparser                  # INI file parser (built-in)
