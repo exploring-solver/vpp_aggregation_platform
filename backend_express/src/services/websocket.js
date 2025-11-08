@@ -40,28 +40,41 @@ export function setupWebSocket(wss) {
   });
 
   // Subscribe to Redis channels and broadcast to WebSocket clients
-  subscribeChannel('telemetry:new', (data) => {
-    broadcastToClients({
-      type: 'telemetry',
-      data
-    });
-  });
+  (async () => {
+    try {
+      await subscribeChannel('telemetry:new', (data) => {
+        broadcastToClients({
+          type: 'telemetry',
+          data
+        });
+      });
 
-  subscribeChannel('dispatch:commands', (data) => {
-    broadcastToClients({
-      type: 'dispatch',
-      data
-    });
-  });
+      await subscribeChannel('dispatch:commands', (data) => {
+        broadcastToClients({
+          type: 'dispatch',
+          data
+        });
+      });
 
-  subscribeChannel('aggregate:update', (data) => {
-    broadcastToClients({
-      type: 'aggregate',
-      data
-    });
-  });
+      await subscribeChannel('vpp:state:update', (data) => {
+        broadcastToClients({
+          type: 'aggregate',
+          data
+        });
+      });
 
-  logger.info('WebSocket server configured with Redis subscriptions');
+      await subscribeChannel('dispatch:optimized', (data) => {
+        broadcastToClients({
+          type: 'dispatch',
+          data
+        });
+      });
+
+      logger.info('WebSocket server configured with Redis subscriptions');
+    } catch (err) {
+      logger.error('Failed to set up Redis subscriptions:', err);
+    }
+  })();
 }
 
 function broadcastToClients(message) {

@@ -93,29 +93,42 @@ async def shutdown_event():
     logger.info("Edge node shutting down")
 
 async def telemetry_loop():
-    """Background task to collect and publish telemetry"""
+    """Background task to collect and publish telemetry - MQTT primary, HTTP fallback"""
     http_failure_count = 0
-    max_http_failures = 5
+    max_http_failures = 3
+    mqtt_primary = True
     
     while True:
         try:
             telemetry = simulator.generate_telemetry()
             logger.debug(f"Generated telemetry: {telemetry}")
             
-            # Publish via MQTT if enabled
-            if mqtt_client and settings.MQTT_ENABLED:
-                await mqtt_client.publish_telemetry(telemetry)
+            # PRIMARY: Publish via MQTT if enabled and connected
+            mqtt_success = False
+            if mqtt_client and settings.MQTT_ENABLED and mqtt_client.connected:
+                try:
+                    await mqtt_client.publish_telemetry(telemetry)
+                    mqtt_success = True
+                    logger.debug(f"Telemetry published via MQTT for node {settings.NODE_ID}")
+                    http_failure_count = 0  # Reset HTTP failure count on MQTT success
+                except Exception as e:
+                    logger.warning(f"MQTT publish failed: {e}, falling back to HTTP")
+                    mqtt_primary = False
             
-            # Also send via HTTP if aggregator URL is configured
-            if settings.AGGREGATOR_URL and http_failure_count < max_http_failures:
+            # FALLBACK: Use HTTP only if MQTT is not available or failed
+            if not mqtt_success and settings.AGGREGATOR_URL and http_failure_count < max_http_failures:
                 try:
                     await send_telemetry_http(telemetry)
                     http_failure_count = 0  # Reset on success
+                    logger.debug(f"Telemetry sent via HTTP fallback for node {settings.NODE_ID}")
                 except Exception as e:
                     http_failure_count += 1
                     if http_failure_count >= max_http_failures:
-                        logger.warning(f"HTTP telemetry disabled after {max_http_failures} consecutive failures. Check aggregator at {settings.AGGREGATOR_URL}")
-                    raise
+                        logger.error(f"HTTP telemetry disabled after {max_http_failures} consecutive failures. MQTT is primary transport.")
+                    else:
+                        logger.warning(f"HTTP telemetry failed ({http_failure_count}/{max_http_failures}): {e}")
+            elif not mqtt_success and not settings.AGGREGATOR_URL:
+                logger.warning("Neither MQTT nor HTTP available for telemetry transmission")
                 
         except Exception as e:
             logger.error(f"Error in telemetry loop: {e}")

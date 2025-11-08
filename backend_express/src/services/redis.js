@@ -75,15 +75,52 @@ export async function publishMessage(channel, message) {
   logger.debug(`Published to ${channel}:`, message);
 }
 
+const channelSubscriptions = new Map();
+let messageHandlerSetup = false;
+
 export async function subscribeChannel(channel, callback) {
   const client = getSubscriberClient();
-  await client.subscribe(channel, (message) => {
-    try {
-      const data = JSON.parse(message);
-      callback(data);
-    } catch {
-      callback(message);
-    }
-  });
-  logger.info(`Subscribed to Redis channel: ${channel}`);
+  
+  // Store callback for this channel
+  if (!channelSubscriptions.has(channel)) {
+    channelSubscriptions.set(channel, []);
+    
+    // Subscribe to channel
+    await client.subscribe(channel);
+    logger.info(`Subscribed to Redis channel: ${channel}`);
+  }
+  
+  channelSubscriptions.get(channel).push(callback);
+  logger.debug(`Added callback to Redis channel: ${channel}`);
+  
+  // Set up global message handler once
+  if (!messageHandlerSetup) {
+    const subscriber = getSubscriberClient();
+    subscriber.on('message', (channelName, message) => {
+      try {
+        const data = typeof message === 'string' ? JSON.parse(message) : message;
+        // Call all callbacks for this channel
+        const callbacks = channelSubscriptions.get(channelName) || [];
+        callbacks.forEach(cb => {
+          try {
+            cb(data);
+          } catch (error) {
+            logger.error(`Error in channel callback for ${channelName}:`, error);
+          }
+        });
+      } catch (error) {
+        // If JSON parse fails, pass raw message
+        const callbacks = channelSubscriptions.get(channelName) || [];
+        callbacks.forEach(cb => {
+          try {
+            cb(message);
+          } catch (err) {
+            logger.error(`Error in channel callback for ${channelName}:`, err);
+          }
+        });
+      }
+    });
+    messageHandlerSetup = true;
+    logger.info('Redis message handler configured');
+  }
 }
