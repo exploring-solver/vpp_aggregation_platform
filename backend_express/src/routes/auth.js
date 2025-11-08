@@ -1,6 +1,6 @@
 import express from 'express';
 import { getCollection } from '../services/database.js';
-import { authenticateSimpleToken, generateToken } from '../middleware/simpleAuth.js';
+import { generateToken } from '../middleware/simpleAuth.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -83,23 +83,38 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me - Get current user info
-router.get('/me', authenticateSimpleToken, async (req, res) => {
+// GET /api/auth/me - Get current user info (public)
+router.get('/me', async (req, res) => {
   try {
-    const userId = req.auth.sub;
-    const collection = getCollection('users');
+    // For public access, return a default user or empty
+    const authHeader = req.headers.authorization;
+    let user = null;
     
-    let user = await collection.findOne({ email: userId });
-    
-    if (!user) {
-      // Create user from token
-      user = {
-        email: req.auth.email,
-        name: req.auth.name,
-        role: req.auth.role || 'viewer',
-        created_at: new Date()
-      };
-      await collection.insertOne(user);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Try to decode token if provided, but don't require it
+      try {
+        const jwt = await import('jsonwebtoken');
+        const token = authHeader.substring(7);
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'vpp-platform-secret-key-change-in-production-2024');
+        const collection = getCollection('users');
+        user = await collection.findOne({ email: decoded.sub || decoded.email });
+        
+        if (!user) {
+          user = {
+            email: decoded.email || decoded.sub,
+            name: decoded.name || decoded.email,
+            role: decoded.role || 'viewer',
+            created_at: new Date()
+          };
+          await collection.insertOne(user);
+        }
+      } catch (error) {
+        // Token invalid, return default
+        user = { email: 'anonymous', name: 'Anonymous', role: 'viewer' };
+      }
+    } else {
+      // No token, return default
+      user = { email: 'anonymous', name: 'Anonymous', role: 'viewer' };
     }
     
     res.json({ success: true, data: user });

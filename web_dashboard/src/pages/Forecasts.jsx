@@ -1,29 +1,96 @@
-import { TrendingUp, Brain, Activity, AlertTriangle, Zap, Battery } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { TrendingUp, Brain, Activity, Brain as BrainIcon, Zap, Battery } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import { useAuthToken } from '../services/auth'
 
 export default function Forecasts() {
+  const [loadForecast, setLoadForecast] = useState(null)
+  const [gridStress, setGridStress] = useState(null)
+  const [optimization, setOptimization] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const { makeApiCall } = useAuthToken()
+
+  useEffect(() => {
+    fetchForecastData()
+    const interval = setInterval(fetchForecastData, 30000) // Update every 30 seconds
+    return () => clearInterval(interval)
+  }, [makeApiCall])
+
+  const fetchForecastData = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      
+      // Fetch load forecast
+      const loadResponse = await makeApiCall(`${apiUrl}/api/forecast/load?horizon_hours=24`)
+      if (loadResponse.ok) {
+        const loadData = await loadResponse.json()
+        setLoadForecast(loadData.data)
+      }
+
+      // Fetch grid stress forecast
+      const stressResponse = await makeApiCall(`${apiUrl}/api/forecast/grid-stress?horizon_hours=6`)
+      if (stressResponse.ok) {
+        const stressData = await stressResponse.json()
+        setGridStress(stressData.data)
+      }
+
+      // Fetch optimization recommendation
+      const optResponse = await makeApiCall(`${apiUrl}/api/optimization/recommendation`)
+      if (optResponse.ok) {
+        const optData = await optResponse.json()
+        setOptimization(optData.data)
+      }
+
+      // Fetch agent recommendations
+      const agentResponse = await makeApiCall(`${apiUrl}/api/agents/recommendations`)
+      if (agentResponse.ok) {
+        const agentData = await agentResponse.json()
+        if (agentData.data) {
+          setOptimization(prev => ({ ...prev, ...agentData.data }))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching forecast data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Prepare chart data from forecasts
+  const loadChartData = loadForecast?.forecast?.map((point, idx) => ({
+    time: idx,
+    load: point.load_kw || point.predicted_load || 0,
+    actual: point.actual_load || null
+  })) || []
+
+  const stressChartData = gridStress?.forecast?.map((point, idx) => ({
+    time: idx,
+    stress: point.stress_score || point.predicted_stress || 0
+  })) || []
+
   const forecasts = [
     {
       type: 'Load Forecast',
-      prediction: '245.8 kW',
-      confidence: 92,
+      prediction: loadForecast?.current_load ? `${loadForecast.current_load.toFixed(1)} kW` : 'N/A',
+      confidence: loadForecast?.confidence || 85,
       timeframe: 'Next 24h',
-      trend: 'increasing',
+      trend: loadForecast?.trend || 'stable',
       icon: Zap,
       color: 'energy',
     },
     {
       type: 'Grid Stress',
-      prediction: '0.65',
-      confidence: 88,
+      prediction: gridStress?.current_stress ? gridStress.current_stress.toFixed(2) : 'N/A',
+      confidence: gridStress?.confidence || 88,
       timeframe: 'Next 6h',
-      trend: 'moderate',
+      trend: gridStress?.trend || 'moderate',
       icon: Activity,
       color: 'primary',
     },
     {
       type: 'SOC Forecast',
-      prediction: '82%',
-      confidence: 95,
+      prediction: optimization?.avg_soc ? `${optimization.avg_soc.toFixed(0)}%` : 'N/A',
+      confidence: optimization?.confidence ? Math.round(optimization.confidence * 100) : 95,
       timeframe: 'Next 12h',
       trend: 'stable',
       icon: Battery,
@@ -94,13 +161,33 @@ export default function Forecasts() {
             <h2 className="text-xl font-bold text-gray-900">Load Forecast (24h)</h2>
             <span className="badge badge-info">LSTM Model</span>
           </div>
-          <div className="h-80 flex items-center justify-center bg-gradient-to-br from-energy-50 to-energy-100 rounded-xl border-2 border-dashed border-energy-300">
-            <div className="text-center">
-              <TrendingUp className="w-12 h-12 text-energy-400 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Load forecasting chart</p>
-              <p className="text-sm text-gray-400 mt-1">AI-powered predictions</p>
+          {loading ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             </div>
-          </div>
+          ) : loadChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={loadChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" label={{ value: 'Hours', position: 'insideBottom' }} />
+                <YAxis label={{ value: 'Load (kW)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="load" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} name="Predicted Load" />
+                {loadChartData.some(d => d.actual !== null) && (
+                  <Line type="monotone" dataKey="actual" stroke="#ef4444" strokeWidth={2} name="Actual Load" />
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-energy-50 to-energy-100 rounded-xl border-2 border-dashed border-energy-300">
+              <div className="text-center">
+                <TrendingUp className="w-12 h-12 text-energy-400 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No forecast data available</p>
+                <p className="text-sm text-gray-400 mt-1">Waiting for forecast service...</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -108,13 +195,30 @@ export default function Forecasts() {
             <h2 className="text-xl font-bold text-gray-900">Grid Stress Score</h2>
             <span className="badge badge-warning">High Accuracy</span>
           </div>
-          <div className="h-80 flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-dashed border-primary-300">
-            <div className="text-center">
-              <Activity className="w-12 h-12 text-primary-400 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Grid stress prediction</p>
-              <p className="text-sm text-gray-400 mt-1">0-1 stress score visualization</p>
+          {loading ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             </div>
-          </div>
+          ) : stressChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={stressChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" label={{ value: 'Hours', position: 'insideBottom' }} />
+                <YAxis domain={[0, 1]} label={{ value: 'Stress Score', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="stress" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} name="Grid Stress" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-dashed border-primary-300">
+              <div className="text-center">
+                <Activity className="w-12 h-12 text-primary-400 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No stress data available</p>
+                <p className="text-sm text-gray-400 mt-1">Waiting for forecast service...</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -129,15 +233,26 @@ export default function Forecasts() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-sm text-gray-600 mb-1">Recommended Action</p>
-            <p className="text-lg font-bold text-gray-900">Charge</p>
+            <p className="text-lg font-bold text-gray-900">
+              {optimization?.recommendedAction || optimization?.recommended_action || 'Hold'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Confidence: {optimization?.confidence ? Math.round(optimization.confidence * 100) : 0}%
+            </p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-sm text-gray-600 mb-1">Expected Revenue</p>
-            <p className="text-lg font-bold text-gray-900">₹2,450</p>
+            <p className="text-lg font-bold text-gray-900">
+              ₹{optimization?.expectedRevenue || optimization?.expected_revenue || 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Per action</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-sm text-gray-600 mb-1">Market Opportunity</p>
-            <p className="text-lg font-bold text-gray-900">High</p>
+            <p className="text-lg font-bold text-gray-900">
+              {optimization?.expectedRevenue > 1000 ? 'High' : optimization?.expectedRevenue > 500 ? 'Medium' : 'Low'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Based on revenue potential</p>
           </div>
         </div>
         <div className="text-center py-8 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border-2 border-dashed border-purple-300">

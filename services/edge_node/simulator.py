@@ -29,6 +29,9 @@ class TelemetrySimulator:
         # Network baseline
         self.net_io_start = psutil.net_io_counters()
         
+        # System capacity (for node registration)
+        self.capacity_kw = random.uniform(100, 200)  # Node capacity in kW
+        
     def get_uptime(self) -> float:
         return time.time() - self.start_time
     
@@ -77,6 +80,56 @@ class TelemetrySimulator:
         net_sent_mb = (net_io.bytes_sent - self.net_io_start.bytes_sent) / (1024 * 1024)
         net_recv_mb = (net_io.bytes_recv - self.net_io_start.bytes_recv) / (1024 * 1024)
         
+        # Get system stats using psutil
+        try:
+            # CPU
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_count = psutil.cpu_count()
+            
+            # Memory
+            memory = psutil.virtual_memory()
+            ram_total_gb = memory.total / (1024**3)
+            ram_used_gb = memory.used / (1024**3)
+            ram_percent = memory.percent
+            
+            # Disk
+            disk = psutil.disk_usage('/')
+            disk_total_gb = disk.total / (1024**3)
+            disk_used_gb = disk.used / (1024**3)
+            disk_percent = disk.percent
+            
+            # Battery (if available, e.g., on laptops)
+            battery_info = None
+            try:
+                battery = psutil.sensors_battery()
+                if battery:
+                    battery_info = {
+                        "percent": battery.percent,
+                        "plugged": battery.power_plugged,
+                        "secsleft": battery.secsleft if battery.secsleft else None
+                    }
+            except (AttributeError, NotImplementedError):
+                pass  # Battery not available on this system
+            
+            # System load (Unix-like systems)
+            try:
+                load_avg = psutil.getloadavg()
+            except (AttributeError, OSError):
+                load_avg = None
+            
+        except Exception as e:
+            # Fallback if psutil fails
+            cpu_percent = cpu_usage
+            cpu_count = 1
+            ram_total_gb = 16.0
+            ram_used_gb = 8.0
+            ram_percent = 50.0
+            disk_total_gb = 500.0
+            disk_used_gb = 250.0
+            disk_percent = 50.0
+            battery_info = None
+            load_avg = None
+        
         # Construct telemetry payload
         telemetry = {
             "dc_id": self.dc_id,
@@ -89,9 +142,31 @@ class TelemetrySimulator:
             "freq": round(self.freq, 3),
             "load_factor": round(self.load_factor, 3),
             "charge_rate_kw": round(self.charge_rate, 2),
+            # System stats
+            "system": {
+                "cpu": {
+                    "percent": round(cpu_percent, 2),
+                    "count": cpu_count,
+                    "load_avg": list(load_avg) if load_avg else None
+                },
+                "memory": {
+                    "total_gb": round(ram_total_gb, 2),
+                    "used_gb": round(ram_used_gb, 2),
+                    "percent": round(ram_percent, 2),
+                    "available_gb": round(ram_total_gb - ram_used_gb, 2)
+                },
+                "disk": {
+                    "total_gb": round(disk_total_gb, 2),
+                    "used_gb": round(disk_used_gb, 2),
+                    "percent": round(disk_percent, 2),
+                    "free_gb": round(disk_total_gb - disk_used_gb, 2)
+                },
+                "battery": battery_info
+            },
             "meta": {
                 "sim": True,
                 "battery_kwh": self.battery_kwh,
+                "capacity_kw": self.capacity_kw,
                 "uptime": int(self.get_uptime())
             }
         }

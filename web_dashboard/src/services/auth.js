@@ -15,16 +15,41 @@ export const useAuthToken = () => {
       // Try to get token if authenticated (for write operations or if available)
       if (isAuthenticated) {
         try {
-          token = await getAccessTokenSilently({
+          // Don't request offline_access scope to avoid refresh token issues
+          const tokenOptions = {
             authorizationParams: {
-              audience: import.meta.env.VITE_AUTH0_AUDIENCE,
               scope: "read:vpp write:vpp admin:vpp"
             }
-          })
+          }
+          
+          // Only add audience if it's configured
+          if (import.meta.env.VITE_AUTH0_AUDIENCE) {
+            tokenOptions.authorizationParams.audience = import.meta.env.VITE_AUTH0_AUDIENCE
+          }
+          
+          token = await getAccessTokenSilently(tokenOptions)
         } catch (tokenError) {
+          // Log the error for debugging
+          console.warn('Token fetch error:', tokenError)
+          
           // If token fetch fails but it's a read request, continue without token
           if (!isReadRequest) {
-            throw tokenError
+            // For write operations, try without audience if that was the issue
+            if (tokenError.error === 'missing_refresh_token' || tokenError.message?.includes('Refresh Token')) {
+              try {
+                token = await getAccessTokenSilently({
+                  authorizationParams: {
+                    scope: "read:vpp write:vpp admin:vpp"
+                    // No audience to avoid refresh token requirement
+                  }
+                })
+              } catch (retryError) {
+                console.error('Retry token fetch failed:', retryError)
+                throw tokenError
+              }
+            } else {
+              throw tokenError
+            }
           }
         }
       }

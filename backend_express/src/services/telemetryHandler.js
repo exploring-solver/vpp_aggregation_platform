@@ -4,9 +4,11 @@ import logger from '../utils/logger.js';
 
 export async function handleTelemetryData(telemetry, nodeAuth = null) {
   try {
-    // Auto-register node if authenticated via M2M and not already registered
-    if (nodeAuth?.authType === 'M2M') {
-      await ensureNodeRegistered(nodeAuth.nodeId, telemetry);
+    // Auto-register node if it has dc_id (works for both M2M and public access now)
+    if (telemetry.dc_id) {
+      // Use nodeAuth if available, otherwise use dc_id from telemetry
+      const nodeId = nodeAuth?.nodeId || telemetry.dc_id;
+      await ensureNodeRegistered(nodeId, telemetry);
     }
 
     // Validate and enrich telemetry data
@@ -88,14 +90,21 @@ async function ensureNodeRegistered(nodeId, telemetry) {
     const collection = getCollection('nodes');
     const existingNode = await collection.findOne({ dc_id: nodeId });
     
+    // Extract capacity and battery from telemetry meta or use defaults
+    const capacity_kw = telemetry.meta?.capacity_kw || telemetry.capacity_kw || 150;
+    const battery_kwh = telemetry.meta?.battery_kwh || telemetry.battery_kwh || 200;
+    
     if (!existingNode) {
       const nodeData = {
         dc_id: nodeId,
-        node_id: nodeId, // New field
+        node_id: nodeId,
         node_name: telemetry.node_name || `Edge Node ${nodeId}`,
         node_location: telemetry.node_location || 'Unknown',
         node_type: telemetry.node_type || 'edge_device',
         status: 'online',
+        capacity_kw: capacity_kw, // Required for aggregation
+        battery_kwh: battery_kwh, // Required for aggregation
+        region: telemetry.region || 'default',
         created_at: new Date(),
         updated_at: new Date(),
         auto_registered: true,
@@ -111,18 +120,26 @@ async function ensureNodeRegistered(nodeId, telemetry) {
       };
       
       await collection.insertOne(nodeData);
-      logger.info(`Auto-registered new node: ${nodeId} (${nodeData.node_name})`);
+      logger.info(`Auto-registered new node: ${nodeId} (${nodeData.node_name}) with capacity ${capacity_kw}kW, battery ${battery_kwh}kWh`);
     } else {
-      // Update last seen and status
+      // Update last seen, status, and capacity if not set
+      const updateData = {
+        status: 'online',
+        updated_at: new Date(),
+        last_seen: new Date()
+      };
+      
+      // Update capacity if missing or if telemetry provides it
+      if (!existingNode.capacity_kw || telemetry.meta?.capacity_kw) {
+        updateData.capacity_kw = capacity_kw;
+      }
+      if (!existingNode.battery_kwh || telemetry.meta?.battery_kwh) {
+        updateData.battery_kwh = battery_kwh;
+      }
+      
       await collection.updateOne(
         { dc_id: nodeId },
-        { 
-          $set: { 
-            status: 'online',
-            updated_at: new Date(),
-            last_seen: new Date()
-          }
-        }
+        { $set: updateData }
       );
     }
   } catch (error) {

@@ -3,12 +3,11 @@ import { getCollection } from '../services/database.js';
 import { publishToNode } from '../services/mqtt.js';
 import { publishMessage } from '../services/redis.js';
 import logger from '../utils/logger.js';
-import { optionalAuth, optionalCheckRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/dispatch - Dispatch command to edge nodes (requires auth)
-router.post('/', optionalAuth, optionalCheckRole(['operator', 'admin']), async (req, res) => {
+// POST /api/dispatch - Dispatch command to edge nodes (public)
+router.post('/', async (req, res) => {
   try {
     const { targets, action, params = {} } = req.body;
     
@@ -40,7 +39,7 @@ router.post('/', optionalAuth, optionalCheckRole(['operator', 'admin']), async (
       dc_id: dcId,
       action,
       params,
-      issued_by: req.auth?.sub || 'system',
+      issued_by: 'system',
       timestamp,
       status: 'sent',
       result: {}

@@ -5,6 +5,7 @@ import {
   AlertCircle, CheckCircle2, XCircle, Send, Check, X,
   Leaf, Shield
 } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts'
 import { useAuthToken } from '../services/auth'
 
 export default function DGridOperator() {
@@ -12,6 +13,8 @@ export default function DGridOperator() {
   const [loading, setLoading] = useState(true)
   const [flexibilityRequest, setFlexibilityRequest] = useState({ mw: '', duration: '' })
   const [activeBids, setActiveBids] = useState([])
+  const [frequencyHistory, setFrequencyHistory] = useState([])
+  const [powerFlowHistory, setPowerFlowHistory] = useState([])
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
@@ -23,6 +26,15 @@ export default function DGridOperator() {
     }, 10000)
     return () => clearInterval(interval)
   }, [makeApiCall])
+
+  // Update history for charts
+  useEffect(() => {
+    if (data) {
+      const timestamp = new Date().toISOString()
+      setFrequencyHistory(prev => [...prev.slice(-19), { time: new Date().toLocaleTimeString(), freq: data.gridFrequency }])
+      setPowerFlowHistory(prev => [...prev.slice(-19), { time: new Date().toLocaleTimeString(), power: data.realTimePowerFlowBalance }])
+    }
+  }, [data])
 
   const fetchAggregateData = async () => {
     try {
@@ -188,9 +200,26 @@ export default function DGridOperator() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Grid Frequency Trends</h3>
-            <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
-              Chart placeholder - implement with Recharts
-            </div>
+            {frequencyHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height={256}>
+                <LineChart data={frequencyHistory}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis domain={[49.5, 50.5]} label={{ value: 'Frequency (Hz)', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="freq" stroke="#3b82f6" strokeWidth={2} name="Frequency (Hz)" />
+                  <Line type="monotone" dataKey={() => 50.0} stroke="#ef4444" strokeDasharray="5 5" strokeWidth={1} name="Target (50 Hz)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
+                <div className="text-center">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Collecting frequency data...</p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Current Frequency</p>
@@ -208,9 +237,25 @@ export default function DGridOperator() {
           </div>
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Real-Time Power Flow Balance</h3>
-            <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
-              Chart placeholder - implement with Recharts
-            </div>
+            {powerFlowHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height={256}>
+                <AreaChart data={powerFlowHistory}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis label={{ value: 'Power (MW)', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="power" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Power Flow (MW)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
+                <div className="text-center">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Collecting power flow data...</p>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                 <div className="flex items-center">

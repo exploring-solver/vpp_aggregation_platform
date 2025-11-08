@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Server, CheckCircle2, AlertCircle, Battery, Zap, Activity } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Server, CheckCircle2, AlertCircle, Battery, Zap, Activity, Terminal, Settings, ExternalLink, Key } from 'lucide-react'
 import { useAuthToken } from '../services/auth'
 
 export default function Nodes() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sshStatuses, setSshStatuses] = useState({})
+  const navigate = useNavigate()
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
@@ -29,10 +32,14 @@ export default function Nodes() {
           soc: node.last_state?.soc || 0,
           frequency: node.last_state?.freq || 50.0,
           location: node.node_location || 'Unknown',
-          lastSeen: node.last_state?.timestamp
+          lastSeen: node.last_state?.timestamp,
+          hasSshConfig: !!node.ssh_config
         }))
         setNodes(processedNodes)
         setError(null)
+        
+        // Check SSH status for each node
+        checkSSHStatuses(processedNodes)
       } else {
         setError('Failed to fetch nodes')
         setNodes([])
@@ -46,6 +53,48 @@ export default function Nodes() {
     }
   }
 
+  const checkSSHStatuses = async (nodeList) => {
+    const statuses = {}
+    // Check SSH status for nodes with config (in parallel)
+    const promises = nodeList.map(async (node) => {
+      if (node.hasSshConfig) {
+        try {
+          const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ssh/${node.id}/test`
+          const response = await makeApiCall(apiUrl, { method: 'POST' })
+          if (response.ok) {
+            const data = await response.json()
+            return { id: node.id, status: data.success && data.data?.success }
+          } else {
+            return { id: node.id, status: false }
+          }
+        } catch (error) {
+          return { id: node.id, status: false }
+        }
+      } else {
+        return { id: node.id, status: null } // No SSH config
+      }
+    })
+    
+    const results = await Promise.all(promises)
+    results.forEach(({ id, status }) => {
+      statuses[id] = status
+    })
+    setSshStatuses(statuses)
+  }
+
+  const handleViewNode = (nodeId) => {
+    navigate(`/nodes/${nodeId}`)
+  }
+
+  const handleConfigureSSH = (nodeId, e) => {
+    e.stopPropagation()
+    navigate(`/nodes/${nodeId}`, { state: { openTab: 'config' } })
+  }
+
+  const handleOpenSSH = (nodeId, e) => {
+    e.stopPropagation()
+    navigate(`/nodes/${nodeId}`, { state: { openTab: 'ssh' } })
+  }
 
   if (loading) {
     return (
@@ -144,11 +193,59 @@ export default function Nodes() {
             </div>
 
             <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">{node.location}</span>
-                <span className={`badge ${node.status === 'online' ? 'badge-success' : 'badge-error'}`}>
-                  {node.status}
-                </span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  {node.hasSshConfig && (
+                    <div className="flex items-center space-x-1">
+                      {sshStatuses[node.id] === true ? (
+                        <div className="flex items-center space-x-1 text-green-600">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span className="text-xs">SSH</span>
+                        </div>
+                      ) : sshStatuses[node.id] === false ? (
+                        <div className="flex items-center space-x-1 text-red-600">
+                          <AlertCircle className="w-3 h-3" />
+                          <span className="text-xs">SSH</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1 text-gray-400">
+                          <Key className="w-3 h-3" />
+                          <span className="text-xs">SSH</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <span className={`badge ${node.status === 'online' ? 'badge-success' : 'badge-error'}`}>
+                    {node.status}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleViewNode(node.id)}
+                  className="flex-1 btn btn-primary flex items-center justify-center space-x-2 text-sm py-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>View Details</span>
+                </button>
+                {node.hasSshConfig ? (
+                  <button
+                    onClick={(e) => handleOpenSSH(node.id, e)}
+                    className="btn btn-secondary flex items-center justify-center space-x-2 text-sm py-2 px-3"
+                    title="Open SSH Terminal"
+                  >
+                    <Terminal className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => handleConfigureSSH(node.id, e)}
+                    className="btn btn-secondary flex items-center justify-center space-x-2 text-sm py-2 px-3"
+                    title="Configure SSH"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
             </div>
