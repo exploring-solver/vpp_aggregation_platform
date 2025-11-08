@@ -52,12 +52,22 @@ export class SSHManager {
       // Add authentication method
       if (sshConfig.private_key) {
         // Use private key authentication (PEM file)
-        const privateKey = this.decryptPassword(sshConfig.private_key);
+        // Decrypt only if it was encrypted (check if it contains ':' separator from encryption)
+        let privateKey = sshConfig.private_key;
+        if (sshConfig.private_key_encrypted && sshConfig.private_key.includes(':')) {
+          // It's encrypted, decrypt it
+          privateKey = this.decryptPassword(sshConfig.private_key);
+        }
+        // Pass PEM content directly to node-ssh (it accepts the key as a string)
         credentials.privateKey = privateKey;
         
         // Add passphrase if provided
         if (sshConfig.passphrase) {
-          credentials.passphrase = this.decryptPassword(sshConfig.passphrase);
+          let passphrase = sshConfig.passphrase;
+          if (sshConfig.passphrase_encrypted && sshConfig.passphrase.includes(':')) {
+            passphrase = this.decryptPassword(sshConfig.passphrase);
+          }
+          credentials.passphrase = passphrase;
         }
       } else if (password) {
         // Use password authentication

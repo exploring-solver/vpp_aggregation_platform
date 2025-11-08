@@ -176,13 +176,32 @@ router.put('/:dcId/config', async (req, res) => {
     
     // Handle private key authentication
     if (ssh_config.private_key && ssh_config.private_key.trim()) {
-      encryptedConfig.private_key = sshManager.encryptPassword(ssh_config.private_key.trim());
-      encryptedConfig.private_key_encrypted = true;
+      const privateKeyContent = ssh_config.private_key.trim();
+      
+      // Optionally encrypt the private key (set ENCRYPT_SSH_KEYS=false to skip encryption)
+      // Note: Encryption is recommended for production, but you can disable it for simplicity
+      const shouldEncrypt = process.env.ENCRYPT_SSH_KEYS !== 'false';
+      
+      if (shouldEncrypt) {
+        // Encrypt for secure storage
+        encryptedConfig.private_key = sshManager.encryptPassword(privateKeyContent);
+        encryptedConfig.private_key_encrypted = true;
+      } else {
+        // Store plain text (less secure but simpler - not recommended for production)
+        encryptedConfig.private_key = privateKeyContent;
+        encryptedConfig.private_key_encrypted = false;
+        logger.warn(`⚠️  Storing SSH private key in plain text for ${dcId} (ENCRYPT_SSH_KEYS=false)`);
+      }
       
       // Encrypt passphrase if provided
       if (ssh_config.passphrase && ssh_config.passphrase.trim()) {
-        encryptedConfig.passphrase = sshManager.encryptPassword(ssh_config.passphrase.trim());
-        encryptedConfig.passphrase_encrypted = true;
+        if (shouldEncrypt) {
+          encryptedConfig.passphrase = sshManager.encryptPassword(ssh_config.passphrase.trim());
+          encryptedConfig.passphrase_encrypted = true;
+        } else {
+          encryptedConfig.passphrase = ssh_config.passphrase.trim();
+          encryptedConfig.passphrase_encrypted = false;
+        }
       }
       
       // Clear password when using private key
