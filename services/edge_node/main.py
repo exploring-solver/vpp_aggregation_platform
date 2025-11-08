@@ -147,19 +147,30 @@ async def telemetry_loop():
         await asyncio.sleep(settings.TELEMETRY_INTERVAL)
 
 async def send_telemetry_http(telemetry: dict):
-    """Send telemetry to aggregator via HTTP with Bearer token."""
+    """Send telemetry to aggregator via HTTP with API key or Bearer token."""
     import httpx
     try:
         url = f"{settings.AGGREGATOR_URL}/api/telemetry"
         logger.debug(f"Sending HTTP telemetry to {url}")
-        # Obtain M2M token (cached)
-        token = await get_m2m_token()
+        
+        # Choose authentication method
+        headers = {}
+        if settings.USE_API_KEY_AUTH and settings.API_KEY:
+            headers["X-API-Key"] = settings.API_KEY
+        else:
+            # Fallback to JWT token
+            try:
+                token = await get_m2m_token()
+                headers["Authorization"] = f"Bearer {token}"
+            except Exception as e:
+                logger.error(f"Failed to get M2M token: {e}")
+                return
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 json=telemetry,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
                 timeout=10.0
             )
             if response.status_code == 201:

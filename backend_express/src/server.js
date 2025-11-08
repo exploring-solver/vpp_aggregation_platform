@@ -20,6 +20,7 @@ import { connectRedis, getRedisClient } from './services/redis.js';
 import { initMQTT } from './services/mqtt.js';
 import logger from './utils/logger.js';
 import { authenticateToken } from './middleware/auth.js';
+import { authenticateFlexible } from './middleware/apiAuth.js';
 import { setupWebSocket } from './services/websocket.js';
 
 dotenv.config();
@@ -54,8 +55,8 @@ app.get('/health', (req, res) => {
 // Public routes
 app.use('/api/auth', authRoutes);
 
-// Protected routes
-app.use('/api/telemetry', authenticateToken, telemetryRoutes);
+// Protected routes - telemetry uses flexible auth (API key or JWT)
+app.use('/api/telemetry', authenticateFlexible, telemetryRoutes);
 app.use('/api/dispatch', authenticateToken, dispatchRoutes);
 app.use('/api/nodes', authenticateToken, nodesRoutes);
 app.use('/api/aggregate', authenticateToken, aggregateRoutes);
