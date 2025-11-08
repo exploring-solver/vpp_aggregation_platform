@@ -1,5 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -20,8 +21,8 @@ class Settings(BaseSettings):
     # MQTT Configuration
     MQTT_ENABLED: bool = True
     MQTT_BROKER_URL: str = "mqtt://localhost:1883"
-    MQTT_USERNAME: str | None = None
-    MQTT_PASSWORD: str | None = None
+    MQTT_USERNAME: Optional[str] = None
+    MQTT_PASSWORD: Optional[str] = None
 
     # HTTP Aggregator
     AGGREGATOR_URL: str = "http://localhost:3000"
