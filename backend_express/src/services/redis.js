@@ -79,6 +79,10 @@ const channelSubscriptions = new Map();
 let messageHandlerSetup = false;
 
 export async function subscribeChannel(channel, callback) {
+  if (typeof callback !== 'function') {
+    throw new Error('Callback must be a function');
+  }
+  
   const client = getSubscriberClient();
   
   // Store callback for this channel
@@ -96,30 +100,39 @@ export async function subscribeChannel(channel, callback) {
   // Set up global message handler once
   if (!messageHandlerSetup) {
     const subscriber = getSubscriberClient();
-    subscriber.on('message', (channelName, message) => {
+    
+    // Redis v4+ uses 'message' event with (message, channel) signature
+    subscriber.on('message', (message, channelName) => {
       try {
-        const data = typeof message === 'string' ? JSON.parse(message) : message;
-        // Call all callbacks for this channel
+        // Parse message data
+        let data;
+        try {
+          data = typeof message === 'string' ? JSON.parse(message) : message;
+        } catch (parseError) {
+          // If JSON parse fails, use raw message
+          data = message;
+        }
+        
+        // Get all callbacks for this channel
         const callbacks = channelSubscriptions.get(channelName) || [];
+        
+        // Call all callbacks
         callbacks.forEach(cb => {
-          try {
-            cb(data);
-          } catch (error) {
-            logger.error(`Error in channel callback for ${channelName}:`, error);
+          if (typeof cb === 'function') {
+            try {
+              cb(data);
+            } catch (error) {
+              logger.error(`Error in channel callback for ${channelName}:`, error);
+            }
+          } else {
+            logger.warn(`Invalid callback for channel ${channelName}: not a function`);
           }
         });
       } catch (error) {
-        // If JSON parse fails, pass raw message
-        const callbacks = channelSubscriptions.get(channelName) || [];
-        callbacks.forEach(cb => {
-          try {
-            cb(message);
-          } catch (err) {
-            logger.error(`Error in channel callback for ${channelName}:`, err);
-          }
-        });
+        logger.error(`Error handling Redis message for ${channelName}:`, error);
       }
     });
+    
     messageHandlerSetup = true;
     logger.info('Redis message handler configured');
   }
