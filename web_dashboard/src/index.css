@@ -42,11 +42,11 @@ body {
   }
 
   .card-energy {
-    @apply bg-gradient-to-br from-white to-primary-50 border-primary-200 shadow-lg;
+    @apply bg-gradient-to-br from-white to-primary-50 border-primary-200 shadow-lg rounded-2xl p-6 border hover:shadow-xl transition-shadow duration-300;
   }
 
   .card-grid {
-    @apply bg-gradient-to-br from-white to-grid-50 border-grid-200 shadow-lg;
+    @apply bg-gradient-to-br from-white to-grid-50 border-grid-200 shadow-lg rounded-2xl p-6 border hover:shadow-xl transition-shadow duration-300;
   }
 
   .stat-card {
@@ -95,7 +95,7 @@ body {
   }
 
   .page-header {
-    @apply mb-8 pb-4 border-b border-gray-200;
+    @apply mb-6 pb-6 border-b border-gray-200;
   }
 
   .page-title {

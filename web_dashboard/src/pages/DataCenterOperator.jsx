@@ -63,13 +63,17 @@ export default function DataCenterOperator() {
 
   return (
     <div>
-      <div className="flex items-center mb-8">
-        <Database className="w-8 h-8 text-primary-600 mr-3" />
-        <h1 className="text-3xl font-bold text-gray-900">Data Center Energy Operations Dashboard</h1>
+      <div className="page-header">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="page-title">Data Center Energy Operations Dashboard</h1>
+            <p className="mt-2 text-gray-600">Monitor and control your data center energy operations</p>
+          </div>
+        </div>
       </div>
 
       {/* Live Operations Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <Activity className="w-5 h-5 mr-2 text-primary-600" />
           Live Operations
@@ -106,7 +110,7 @@ export default function DataCenterOperator() {
       </div>
 
       {/* Revenue Streams Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <DollarSign className="w-5 h-5 mr-2 text-primary-600" />
           Revenue Streams
@@ -145,7 +149,7 @@ export default function DataCenterOperator() {
       </div>
 
       {/* Performance Trends Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <TrendingUp className="w-5 h-5 mr-2 text-primary-600" />
           Performance Trends
@@ -173,7 +177,7 @@ export default function DataCenterOperator() {
       </div>
 
       {/* Forecasts Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <BarChart3 className="w-5 h-5 mr-2 text-primary-600" />
           Forecasts
@@ -216,7 +220,7 @@ export default function DataCenterOperator() {
       </div>
 
       {/* Control Panel Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <Settings className="w-5 h-5 mr-2 text-primary-600" />
           Control Panel
@@ -285,7 +289,7 @@ export default function DataCenterOperator() {
       </div>
 
       {/* Compliance & Settlement Section */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
           <FileText className="w-5 h-5 mr-2 text-primary-600" />
           Compliance & Settlement

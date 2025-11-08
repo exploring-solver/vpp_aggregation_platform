@@ -10,7 +10,7 @@ export default function Dispatch() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="card-energy">
           <div className="flex items-center space-x-3 mb-4">
             <div className="p-2 bg-gradient-to-br from-energy-500 to-energy-600 rounded-lg">

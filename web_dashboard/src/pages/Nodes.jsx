@@ -37,7 +37,7 @@ export default function Nodes() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
         {nodes.map((node) => (
           <div key={node.id} className="card hover:shadow-xl transition-all duration-300">
             <div className="flex items-start justify-between mb-4">

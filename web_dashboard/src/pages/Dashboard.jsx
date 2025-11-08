@@ -104,7 +104,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {stats.map((stat) => (
           <div key={stat.name} className={`stat-card border-2 ${stat.borderColor} bg-gradient-to-br ${stat.bgGradient}`}>
             <div className="flex items-start justify-between mb-4">
@@ -137,7 +137,7 @@ export default function Dashboard() {
       </div>
 
       {/* Secondary Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="card-energy">
           <div className="flex items-center justify-between">
             <div>
@@ -174,7 +174,7 @@ export default function Dashboard() {
       </div>
 
       {/* System Status & Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-gray-900">Power Output (24h)</h3>

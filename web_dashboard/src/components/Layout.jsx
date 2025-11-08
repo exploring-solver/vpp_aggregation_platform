@@ -90,7 +90,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <div className="pl-72">
-        <main className="min-h-screen p-8">
+        <main className="min-h-screen p-6 md:p-8 max-w-[1920px] mx-auto">
           <Outlet />
         </main>
       </div>
