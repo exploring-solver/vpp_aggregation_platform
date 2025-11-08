@@ -8,6 +8,7 @@ import asyncio
 import websockets
 import json
 from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 import statistics
 
@@ -149,7 +150,7 @@ class DataCenterGateway:
         command = {
             'type': command_type,
             'dc_id': dc_id,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             **kwargs
         }
         
@@ -168,7 +169,7 @@ class DataCenterGateway:
             
             self.connected_nodes[node_id] = {
                 'websocket': websocket,
-                'connected_at': datetime.utcnow().isoformat(),
+                'connected_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                 'hostname': initial_data.get('hostname', 'unknown')
             }
             
@@ -281,6 +282,7 @@ class DataCenterGateway:
         print("="*60)
         print("🏢 DATA CENTER GATEWAY & TELEMETRY NORMALIZER")
         print("="*60)
+        print(f"Started at: {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}")
         print(f"Listening on: ws://{self.host}:{self.port}")
         print(f"Started at: {datetime.utcnow().isoformat()}Z")
         print("="*60)
