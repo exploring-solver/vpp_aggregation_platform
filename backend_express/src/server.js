@@ -13,6 +13,9 @@ import dispatchRoutes from './routes/dispatch.js';
 import nodesRoutes from './routes/nodes.js';
 import aggregateRoutes from './routes/aggregate.js';
 import authRoutes from './routes/auth.js';
+import forecastRoutes from './routes/forecast.js';
+import optimizationRoutes from './routes/optimization.js';
+import marketRoutes from './routes/market.js';
 
 // Import services
 import { connectDB } from './services/database.js';
@@ -22,6 +25,8 @@ import logger from './utils/logger.js';
 import { authenticateToken } from './middleware/auth.js';
 import { authenticateFlexible } from './middleware/apiAuth.js';
 import { setupWebSocket } from './services/websocket.js';
+import forecastScheduler from './jobs/forecastScheduler.js';
+import optimizationScheduler from './jobs/optimizationScheduler.js';
 
 dotenv.config();
 
@@ -60,6 +65,9 @@ app.use('/api/telemetry', authenticateFlexible, telemetryRoutes);
 app.use('/api/dispatch', authenticateToken, dispatchRoutes);
 app.use('/api/nodes', authenticateToken, nodesRoutes);
 app.use('/api/aggregate', authenticateToken, aggregateRoutes);
+app.use('/api/forecast', authenticateToken, forecastRoutes);
+app.use('/api/optimization', authenticateToken, optimizationRoutes);
+app.use('/api/market', authenticateToken, marketRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -104,6 +112,11 @@ async function startServer() {
     await initMQTT();
     logger.info('MQTT client initialized');
 
+    // Start scheduled jobs
+    forecastScheduler.start();
+    optimizationScheduler.start();
+    logger.info('Scheduled jobs started');
+
     // Start HTTP server
     const server = createServer(app);
     server.listen(PORT, () => {
@@ -122,6 +135,11 @@ async function startServer() {
     // Graceful shutdown
     process.on('SIGTERM', async () => {
       logger.info('SIGTERM received, shutting down gracefully');
+      
+      // Stop schedulers
+      forecastScheduler.stop();
+      optimizationScheduler.stop();
+      
       server.close(() => {
         logger.info('HTTP server closed');
       });

@@ -58,3 +58,6 @@ coverage/
 *.pem
 *.key
 *.cert
+backend_express/IMPLEMENTATION_SUMMARY.md
+.gitignore
+backend_express/IMPLEMENTATION_REQUIREMENTS.md
