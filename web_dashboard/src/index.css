@@ -3,54 +3,110 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  background: linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%);
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors;
+    @apply px-4 py-2.5 rounded-xl font-medium transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed;
+    @apply bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+    @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+  }
+
+  .btn-energy {
+    @apply bg-gradient-to-r from-energy-500 to-energy-600 text-white hover:from-energy-600 hover:to-energy-700 shadow-lg hover:shadow-xl;
+  }
+
+  .btn-grid {
+    @apply bg-gradient-to-r from-grid-500 to-grid-600 text-white hover:from-grid-600 hover:to-grid-700 shadow-lg hover:shadow-xl;
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-md p-6;
+    @apply bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300;
+  }
+
+  .card-energy {
+    @apply bg-gradient-to-br from-white to-primary-50 border-primary-200 shadow-lg;
+  }
+
+  .card-grid {
+    @apply bg-gradient-to-br from-white to-grid-50 border-grid-200 shadow-lg;
+  }
+
+  .stat-card {
+    @apply card relative overflow-hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary-100 to-transparent rounded-full -mr-16 -mt-16 opacity-50;
   }
 
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500;
+    @apply w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white;
   }
 
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
   }
 
   .badge-success {
-    @apply bg-green-100 text-green-800;
+    @apply bg-grid-100 text-grid-800 border border-grid-200;
   }
 
   .badge-warning {
-    @apply bg-yellow-100 text-yellow-800;
+    @apply bg-energy-100 text-energy-800 border border-energy-200;
   }
 
   .badge-error {
-    @apply bg-red-100 text-red-800;
+    @apply bg-red-100 text-red-800 border border-red-200;
   }
 
   .badge-info {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-primary-100 text-primary-800 border border-primary-200;
+  }
+
+  .sidebar-link {
+    @apply flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200;
+  }
+
+  .sidebar-link-active {
+    @apply bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg;
+  }
+
+  .sidebar-link-inactive {
+    @apply text-gray-700 hover:bg-gray-100 hover:text-primary-600;
+  }
+
+  .page-header {
+    @apply mb-8 pb-4 border-b border-gray-200;
+  }
+
+  .page-title {
+    @apply text-3xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent;
+  }
+
+  .metric-value {
+    @apply text-3xl font-bold text-gray-900 tracking-tight;
+  }
+
+  .metric-label {
+    @apply text-sm font-medium text-gray-600 uppercase tracking-wider;
   }
 }
