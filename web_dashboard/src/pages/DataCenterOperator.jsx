@@ -10,13 +10,15 @@ export default function DataCenterOperator() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [nodeId] = useState('DC01') // TODO: Get from user context or URL params
-  const { makeApiCall } = useAuthToken()
+  const { makeApiCall, isTokenReady } = useAuthToken()
 
   useEffect(() => {
-    fetchNodeData()
-    const interval = setInterval(fetchNodeData, 10000)
-    return () => clearInterval(interval)
-  }, [nodeId, makeApiCall])
+    if (isTokenReady) {
+      fetchNodeData()
+      const interval = setInterval(fetchNodeData, 10000)
+      return () => clearInterval(interval)
+    }
+  }, [nodeId, makeApiCall, isTokenReady])
 
   const fetchNodeData = async () => {
     try {

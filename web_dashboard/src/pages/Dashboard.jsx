@@ -6,7 +6,7 @@ export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { makeApiCall } = useAuthToken()
+  const { makeApiCall, isTokenReady, isLoading: authLoading } = useAuthToken()
 
   console.log('Dashboard: Component mounted/re-rendered')
 
@@ -54,20 +54,25 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    fetchAggregateData();
-    
-    // Set up polling for real-time updates every 10 seconds
-    const interval = setInterval(fetchAggregateData, 10000);
-    
-    return () => clearInterval(interval);
-  }, [makeApiCall])
+    // Only fetch if we have a valid token
+    if (isTokenReady) {
+      fetchAggregateData();
+      
+      // Set up polling for real-time updates every 10 seconds
+      const interval = setInterval(fetchAggregateData, 10000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [makeApiCall, isTokenReady])
 
-  if (loading) {
+  if (authLoading || !isTokenReady || loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-600 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading Virtual Plant Data...</p>
+          <p className="mt-4 text-gray-600 font-medium">
+            {authLoading || !isTokenReady ? 'Preparing authentication...' : 'Loading Virtual Plant Data...'}
+          </p>
         </div>
       </div>
     )

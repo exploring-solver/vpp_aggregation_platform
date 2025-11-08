@@ -13,16 +13,18 @@ export default function Dispatch() {
     power_kw: '',
     duration_minutes: 15
   })
-  const { makeApiCall } = useAuthToken()
+  const { makeApiCall, isTokenReady } = useAuthToken()
 
   useEffect(() => {
-    fetchNodes()
-    fetchDispatchLogs()
-    const interval = setInterval(() => {
+    if (isTokenReady) {
+      fetchNodes()
       fetchDispatchLogs()
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [makeApiCall])
+      const interval = setInterval(() => {
+        fetchDispatchLogs()
+      }, 10000)
+      return () => clearInterval(interval)
+    }
+  }, [makeApiCall, isTokenReady])
 
   const fetchNodes = async () => {
     try {

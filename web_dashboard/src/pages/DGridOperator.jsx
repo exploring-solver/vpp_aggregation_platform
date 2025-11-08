@@ -12,17 +12,19 @@ export default function DGridOperator() {
   const [loading, setLoading] = useState(true)
   const [flexibilityRequest, setFlexibilityRequest] = useState({ mw: '', duration: '' })
   const [activeBids, setActiveBids] = useState([])
-  const { makeApiCall } = useAuthToken()
+  const { makeApiCall, isTokenReady } = useAuthToken()
 
   useEffect(() => {
-    fetchAggregateData()
-    fetchActiveBids()
-    const interval = setInterval(() => {
+    if (isTokenReady) {
       fetchAggregateData()
       fetchActiveBids()
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [makeApiCall])
+      const interval = setInterval(() => {
+        fetchAggregateData()
+        fetchActiveBids()
+      }, 10000)
+      return () => clearInterval(interval)
+    }
+  }, [makeApiCall, isTokenReady])
 
   const fetchAggregateData = async () => {
     try {

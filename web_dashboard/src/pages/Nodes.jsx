@@ -6,7 +6,15 @@ export default function Nodes() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { makeApiCall } = useAuthToken()
+  const { makeApiCall, isTokenReady } = useAuthToken()
+
+  useEffect(() => {
+    if (isTokenReady) {
+      fetchNodes()
+      const interval = setInterval(fetchNodes, 15000)
+      return () => clearInterval(interval)
+    }
+  }, [makeApiCall, isTokenReady])
 
   const fetchNodes = async () => {
     try {
@@ -40,14 +48,6 @@ export default function Nodes() {
     }
   }
 
-  useEffect(() => {
-    fetchNodes()
-    
-    // Poll for updates every 15 seconds
-    const interval = setInterval(fetchNodes, 15000)
-    
-    return () => clearInterval(interval)
-  }, [])
 
   if (loading) {
     return (
