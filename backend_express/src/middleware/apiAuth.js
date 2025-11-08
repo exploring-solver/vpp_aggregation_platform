@@ -1,5 +1,6 @@
 import logger from '../utils/logger.js';
 import { getCollection } from '../services/database.js';
+import { authenticateSimpleToken } from './simpleAuth.js';
 
 // Valid node keys - in production, store these securely in database/vault
 const VALID_NODE_KEYS = new Map([
@@ -57,10 +58,8 @@ export function authenticateFlexible(req, res, next) {
 
   // If Bearer token is provided, use JWT auth (user auth)
   if (authHeader?.startsWith('Bearer ')) {
-    // Import and use the JWT middleware
-    import('./auth.js').then(({ authenticateToken }) => {
-      return authenticateToken(req, res, next);
-    }).catch(next);
+    // Use simple auth middleware
+    return authenticateSimpleToken(req, res, next);
   } else {
     // No auth provided
     return res.status(401).json({
