@@ -1,62 +1,36 @@
 import psutil
 import random
 import time
-import platform
 from datetime import datetime
 from typing import Dict, Any
 
 class TelemetrySimulator:
-    """Simulates edge node telemetry including battery, power, and system metrics
-    Uses real system stats from psutil for CPU, RAM, disk, network, and battery (if available)"""
+    """Simulates edge node telemetry including battery, power, and system metrics"""
     
     def __init__(self, dc_id: str):
         self.dc_id = dc_id
         self.start_time = time.time()
         
-        # Get real system battery info (if available)
-        try:
-            battery = psutil.sensors_battery()
-            if battery:
-                self.soc = battery.percent  # Use real battery SOC if available
-                self.battery_kwh = 200.0  # Default, can be overridden
-                self.is_plugged = battery.power_plugged
-            else:
-                # Simulated battery for systems without battery
-                self.soc = random.uniform(60.0, 90.0)
-                self.battery_kwh = random.uniform(150, 250)
-                self.is_plugged = True
-        except (AttributeError, NotImplementedError):
-            # Fallback for systems without battery support
-            self.soc = random.uniform(60.0, 90.0)
-            self.battery_kwh = random.uniform(150, 250)
-            self.is_plugged = True
-        
+        # Battery state
+        self.soc = random.uniform(60.0, 90.0)  # State of Charge %
+        self.battery_kwh = random.uniform(150, 250)  # Total capacity
         self.charge_rate = 0.0  # kW charging/discharging
         
-        # Power state - based on real CPU usage
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        # Map CPU usage to power consumption (higher CPU = higher power)
-        base_power = 80.0 + (cpu_percent * 0.5)  # 80-130 kW range
-        self.power_kw = base_power + random.uniform(-5, 5)
+        # Power state
+        self.power_kw = random.uniform(80.0, 120.0)
         self.base_power = self.power_kw
         
         # Grid frequency
         self.freq = 50.0 + random.uniform(-0.1, 0.1)
         
-        # Load state - based on real CPU usage
-        self.load_factor = min(1.0, cpu_percent / 100.0)
+        # Load state
+        self.load_factor = random.uniform(0.6, 0.9)
         
         # Network baseline
         self.net_io_start = psutil.net_io_counters()
         
-        # System info
-        self.system_info = {
-            'platform': platform.system(),
-            'platform_release': platform.release(),
-            'platform_version': platform.version(),
-            'architecture': platform.machine(),
-            'processor': platform.processor()
-        }
+        # System capacity (for node registration)
+        self.capacity_kw = random.uniform(100, 200)  # Node capacity in kW
         
     def get_uptime(self) -> float:
         return time.time() - self.start_time
@@ -83,7 +57,7 @@ class TelemetrySimulator:
             print("Holding current state")
     
     def generate_telemetry(self) -> Dict[str, Any]:
-        """Generate realistic telemetry data using real system stats"""
+        """Generate realistic telemetry data"""
         
         # Update SOC based on charge rate (every 5 seconds assumed)
         interval_hours = 5 / 3600  # 5 seconds to hours
@@ -91,80 +65,76 @@ class TelemetrySimulator:
             soc_delta = (self.charge_rate * interval_hours / self.battery_kwh) * 100
             self.soc = max(0.0, min(100.0, self.soc + soc_delta))
         
-        # Try to get real battery SOC if available
-        try:
-            battery = psutil.sensors_battery()
-            if battery and battery.percent is not None:
-                self.soc = battery.percent
-                self.is_plugged = battery.power_plugged
-        except (AttributeError, NotImplementedError):
-            pass
-        
         # Simulate frequency variation
         self.freq += random.uniform(-0.02, 0.02)
         self.freq = max(49.7, min(50.3, self.freq))
         
-        # Get real CPU usage
-        cpu_usage = psutil.cpu_percent(interval=0.1)
-        cpu_count = psutil.cpu_count()
-        
-        # Get real memory stats
-        memory = psutil.virtual_memory()
-        memory_percent = memory.percent
-        memory_total_gb = memory.total / (1024 ** 3)
-        memory_used_gb = memory.used / (1024 ** 3)
-        memory_available_gb = memory.available / (1024 ** 3)
-        
-        # Get real disk stats
-        try:
-            disk = psutil.disk_usage('/')
-            disk_percent = disk.percent
-            disk_total_gb = disk.total / (1024 ** 3)
-            disk_used_gb = disk.used / (1024 ** 3)
-            disk_free_gb = disk.free / (1024 ** 3)
-        except:
-            disk_percent = 0
-            disk_total_gb = 0
-            disk_used_gb = 0
-            disk_free_gb = 0
-        
-        # Power consumption varies with real CPU and memory usage
-        load_factor = (cpu_usage + memory_percent) / 200.0  # Combined load
-        self.load_factor = min(1.0, load_factor)
+        # Power consumption varies with load factor
         self.power_kw = self.base_power * self.load_factor + random.uniform(-5, 5)
         
-        # Network I/O (real stats)
+        # CPU usage
+        cpu_usage = psutil.cpu_percent(interval=0.1)
+        
+        # Network I/O
         net_io = psutil.net_io_counters()
         net_sent_mb = (net_io.bytes_sent - self.net_io_start.bytes_sent) / (1024 * 1024)
         net_recv_mb = (net_io.bytes_recv - self.net_io_start.bytes_recv) / (1024 * 1024)
         
-        # Get CPU temperature if available
+        # Get system stats using psutil
         try:
-            temps = psutil.sensors_temperatures()
-            cpu_temp = None
-            if temps:
-                for name, entries in temps.items():
-                    if entries:
-                        cpu_temp = entries[0].current
-                        break
-        except (AttributeError, NotImplementedError):
-            cpu_temp = None
+            # CPU
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_count = psutil.cpu_count()
+            
+            # Memory
+            memory = psutil.virtual_memory()
+            ram_total_gb = memory.total / (1024**3)
+            ram_used_gb = memory.used / (1024**3)
+            ram_percent = memory.percent
+            
+            # Disk
+            disk = psutil.disk_usage('/')
+            disk_total_gb = disk.total / (1024**3)
+            disk_used_gb = disk.used / (1024**3)
+            disk_percent = disk.percent
+            
+            # Battery (if available, e.g., on laptops)
+            battery_info = None
+            try:
+                battery = psutil.sensors_battery()
+                if battery:
+                    battery_info = {
+                        "percent": battery.percent,
+                        "plugged": battery.power_plugged,
+                        "secsleft": battery.secsleft if battery.secsleft else None
+                    }
+            except (AttributeError, NotImplementedError):
+                pass  # Battery not available on this system
+            
+            # System load (Unix-like systems)
+            try:
+                load_avg = psutil.getloadavg()
+            except (AttributeError, OSError):
+                load_avg = None
+            
+        except Exception as e:
+            # Fallback if psutil fails
+            cpu_percent = cpu_usage
+            cpu_count = 1
+            ram_total_gb = 16.0
+            ram_used_gb = 8.0
+            ram_percent = 50.0
+            disk_total_gb = 500.0
+            disk_used_gb = 250.0
+            disk_percent = 50.0
+            battery_info = None
+            load_avg = None
         
-        # Construct enriched telemetry payload with real system stats
+        # Construct telemetry payload
         telemetry = {
             "dc_id": self.dc_id,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "cpu_usage": round(cpu_usage, 2),
-            "cpu_count": cpu_count,
-            "cpu_temp": round(cpu_temp, 1) if cpu_temp else None,
-            "memory_percent": round(memory_percent, 2),
-            "memory_total_gb": round(memory_total_gb, 2),
-            "memory_used_gb": round(memory_used_gb, 2),
-            "memory_available_gb": round(memory_available_gb, 2),
-            "disk_percent": round(disk_percent, 2),
-            "disk_total_gb": round(disk_total_gb, 2),
-            "disk_used_gb": round(disk_used_gb, 2),
-            "disk_free_gb": round(disk_free_gb, 2),
             "network_mb_sent": round(net_sent_mb, 4),
             "network_mb_recv": round(net_recv_mb, 4),
             "soc": round(self.soc, 2),
@@ -172,13 +142,32 @@ class TelemetrySimulator:
             "freq": round(self.freq, 3),
             "load_factor": round(self.load_factor, 3),
             "charge_rate_kw": round(self.charge_rate, 2),
+            # System stats
+            "system": {
+                "cpu": {
+                    "percent": round(cpu_percent, 2),
+                    "count": cpu_count,
+                    "load_avg": list(load_avg) if load_avg else None
+                },
+                "memory": {
+                    "total_gb": round(ram_total_gb, 2),
+                    "used_gb": round(ram_used_gb, 2),
+                    "percent": round(ram_percent, 2),
+                    "available_gb": round(ram_total_gb - ram_used_gb, 2)
+                },
+                "disk": {
+                    "total_gb": round(disk_total_gb, 2),
+                    "used_gb": round(disk_used_gb, 2),
+                    "percent": round(disk_percent, 2),
+                    "free_gb": round(disk_total_gb - disk_used_gb, 2)
+                },
+                "battery": battery_info
+            },
             "meta": {
-                "sim": False,  # Now using real stats
+                "sim": True,
                 "battery_kwh": self.battery_kwh,
-                "uptime": int(self.get_uptime()),
-                "is_plugged": self.is_plugged,
-                "system": self.system_info,
-                "location": "data_center"  # Can be configured
+                "capacity_kw": self.capacity_kw,
+                "uptime": int(self.get_uptime())
             }
         }
         

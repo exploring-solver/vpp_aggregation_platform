@@ -5,6 +5,7 @@ import {
   AlertCircle, CheckCircle2, XCircle, Send, Check, X,
   Leaf, Shield
 } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts'
 import { useAuthToken } from '../services/auth'
 
 export default function DGridOperator() {
@@ -12,23 +13,28 @@ export default function DGridOperator() {
   const [loading, setLoading] = useState(true)
   const [flexibilityRequest, setFlexibilityRequest] = useState({ mw: '', duration: '' })
   const [activeBids, setActiveBids] = useState([])
-  const [agentStatus, setAgentStatus] = useState(null)
-  const [agentDecisions, setAgentDecisions] = useState([])
+  const [frequencyHistory, setFrequencyHistory] = useState([])
+  const [powerFlowHistory, setPowerFlowHistory] = useState([])
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
     fetchAggregateData()
     fetchActiveBids()
-    fetchAgentStatus()
-    fetchAgentDecisions()
     const interval = setInterval(() => {
       fetchAggregateData()
       fetchActiveBids()
-      fetchAgentStatus()
-      fetchAgentDecisions()
     }, 10000)
     return () => clearInterval(interval)
   }, [makeApiCall])
+
+  // Update history for charts
+  useEffect(() => {
+    if (data) {
+      const timestamp = new Date().toISOString()
+      setFrequencyHistory(prev => [...prev.slice(-19), { time: new Date().toLocaleTimeString(), freq: data.gridFrequency }])
+      setPowerFlowHistory(prev => [...prev.slice(-19), { time: new Date().toLocaleTimeString(), power: data.realTimePowerFlowBalance }])
+    }
+  }, [data])
 
   const fetchAggregateData = async () => {
     try {
@@ -67,32 +73,6 @@ export default function DGridOperator() {
       }
     } catch (error) {
       console.error('Error fetching active bids:', error)
-    }
-  }
-
-  const fetchAgentStatus = async () => {
-    try {
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/agents/status`
-      const response = await makeApiCall(apiUrl)
-      if (response.ok) {
-        const result = await response.json()
-        setAgentStatus(result.data)
-      }
-    } catch (error) {
-      console.error('Error fetching agent status:', error)
-    }
-  }
-
-  const fetchAgentDecisions = async () => {
-    try {
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/agents/decisions`
-      const response = await makeApiCall(apiUrl)
-      if (response.ok) {
-        const result = await response.json()
-        setAgentDecisions(result.data.recentDecisions || [])
-      }
-    } catch (error) {
-      console.error('Error fetching agent decisions:', error)
     }
   }
 
@@ -220,9 +200,26 @@ export default function DGridOperator() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Grid Frequency Trends</h3>
-            <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
-              Chart placeholder - implement with Recharts
-            </div>
+            {frequencyHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height={256}>
+                <LineChart data={frequencyHistory}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis domain={[49.5, 50.5]} label={{ value: 'Frequency (Hz)', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="freq" stroke="#3b82f6" strokeWidth={2} name="Frequency (Hz)" />
+                  <Line type="monotone" dataKey={() => 50.0} stroke="#ef4444" strokeDasharray="5 5" strokeWidth={1} name="Target (50 Hz)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
+                <div className="text-center">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Collecting frequency data...</p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Current Frequency</p>
@@ -240,9 +237,25 @@ export default function DGridOperator() {
           </div>
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Real-Time Power Flow Balance</h3>
-            <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
-              Chart placeholder - implement with Recharts
-            </div>
+            {powerFlowHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height={256}>
+                <AreaChart data={powerFlowHistory}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis label={{ value: 'Power (MW)', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="power" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Power Flow (MW)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg mb-4">
+                <div className="text-center">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Collecting power flow data...</p>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                 <div className="flex items-center">
@@ -414,81 +427,6 @@ export default function DGridOperator() {
           </div>
         </div>
       </div>
-
-      {/* Multi-Agent System Status */}
-      {agentStatus && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <Brain className="w-5 h-5 mr-2 text-primary-600" />
-            Autonomous Multi-Agent System
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
-            {Object.entries(agentStatus.agents || {}).map(([name, status]) => (
-              <div key={name} className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">{name}</h3>
-                  <span className={`badge ${
-                    status.status === 'idle' ? 'badge-success' :
-                    status.status === 'running' ? 'badge-info' :
-                    'badge-warning'
-                  }`}>
-                    {status.status}
-                  </span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Runs:</span>
-                    <span className="font-medium">{status.runCount || 0}</span>
-                  </div>
-                  {status.lastRun && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Last Run:</span>
-                      <span className="font-medium">
-                        {new Date(status.lastRun).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {/* Recent Agent Decisions */}
-          {agentDecisions.length > 0 && (
-            <div className="card">
-              <h3 className="text-lg font-semibold mb-4">Recent Agent Decisions</h3>
-              <div className="space-y-3">
-                {agentDecisions.slice(-5).reverse().map((decision, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-gray-900">
-                        {decision.decision?.action || 'No action'}
-                      </span>
-                      <span className={`badge ${
-                        decision.decision?.priority === 'high' ? 'badge-warning' :
-                        decision.decision?.priority === 'medium' ? 'badge-info' :
-                        'badge-success'
-                      }`}>
-                        {decision.decision?.priority || 'low'}
-                      </span>
-                    </div>
-                    {decision.decision?.reasoning && decision.decision.reasoning.length > 0 && (
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        {decision.decision.reasoning.map((reason, rIdx) => (
-                          <li key={rIdx}>• {reason}</li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {new Date(decision.timestamp).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Impact & Savings Section */}
       <div className="mb-6">

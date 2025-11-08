@@ -62,10 +62,11 @@ export class DataAggregator {
       for (const node of nodes) {
         const lastState = await cacheGet(`node:${node.dc_id}:last_state`);
         
-        // Add to totals - use node capacity or calculate from power if missing
-        const nodeCapacityKw = node.capacity_kw || (lastState?.power_kw ? lastState.power_kw * 1.5 : 150);
-        const nodeBatteryKwh = node.battery_kwh || (lastState?.meta?.battery_kwh || 200);
+        // Get node capacity (use defaults if missing)
+        const nodeCapacityKw = node.capacity_kw || 150; // Default 150kW
+        const nodeBatteryKwh = node.battery_kwh || 200; // Default 200kWh
         
+        // Add to totals
         vppState.total_capacity_mw += nodeCapacityKw / 1000;
         vppState.total_battery_kwh += nodeBatteryKwh;
         
@@ -75,12 +76,17 @@ export class DataAggregator {
           vppState.total_power_kw += powerKw;
           
           // Calculate available reserve (based on SOC and capacity)
-          const nodeCapacityMw = (node.capacity_kw || 0) / 1000;
-          const soc = lastState.soc || 0;
+          const nodeCapacityMw = nodeCapacityKw / 1000;
+          const soc = lastState.soc || 50; // Default 50% if missing
           
-          // Available reserve = capacity * (1 - current_load_ratio)
-          // Simplified: assume 50% of capacity can be used for reserves
-          const availableMw = nodeCapacityMw * 0.5 * (soc / 100);
+          // Available reserve calculation:
+          // - For discharge: based on SOC and remaining capacity
+          // - For charge: based on available battery space
+          // Use the minimum of discharge capacity and charge capacity
+          const dischargeCapacityMw = nodeCapacityMw * 0.6 * (soc / 100); // 60% of capacity, scaled by SOC
+          const chargeCapacityMw = nodeCapacityMw * 0.4 * ((100 - soc) / 100); // 40% of capacity, scaled by available space
+          const availableMw = Math.max(dischargeCapacityMw, chargeCapacityMw);
+          
           vppState.available_reserve_mw += availableMw;
           
           // Location-based flexibility
