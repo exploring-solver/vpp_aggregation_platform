@@ -6,8 +6,10 @@ export const authenticateToken = expressjwt({
   secret: jwksRsa.expressJwtSecret({
     cache: true,
     rateLimit: true,
-    jwksRequestsPerMinute: 5,
-    jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`
+    jwksRequestsPerMinute: 100, // Increased from 5 to handle frequent telemetry
+    jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
+    cacheMaxEntries: 5, // Cache more keys
+    cacheMaxAge: 600000, // Cache for 10 minutes
   }),
   audience: process.env.AUTH0_AUDIENCE,
   issuer: `https://${process.env.AUTH0_DOMAIN}/`,
