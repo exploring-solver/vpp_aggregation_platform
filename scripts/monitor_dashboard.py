@@ -69,122 +69,69 @@ class MonitorDashboard:
         print(f"🕐 Last Update: {datetime.utcnow().strftime('%H:%M:%S')}")
         
         if not self.latest_data:
-            print("\n⏳ Waiting for telemetry data...\n")
-            print("═" * 80)
+            print("\n📭 No data received yet. Waiting for updates...")
             return
         
         # Display each node's data
         for dc_id, data in self.latest_data.items():
             print("\n" + "─" * 80)
-            print(f"📍 DATA CENTER: {dc_id} ({data.get('hostname', 'unknown')})")
+            print(f"📍 Node: {dc_id} ({data.get('hostname', 'unknown')})")
             print("─" * 80)
             
-            # Power & Load Section
-            print("\n⚡ POWER & LOAD")
-            power_kw = data.get('power_kw', 0)
-            load = data.get('load', 0)
-            load_avg = data.get('load_average', 0)
+            # Power & Load
+            print(f"\n⚡ Power: {data['power_kw']:.2f} kW")
+            print(f"📊 Load:  {self.create_bar(data['load'])} {data['load']:.1f}%")
             
-            print(f"   Power:        {power_kw:.3f} kW")
-            print(f"   CPU Load:     {load:.1f}%  {self.create_bar(load)}")
-            print(f"   Load Average: {load_avg:.2f}")
+            # Battery Status
+            print(f"\n🔋 Battery SOC: {self.create_bar(data['soc'])} {data['soc']:.1f}%")
+            print(f"⚡ Voltage: {data['voltage']:.1f}V")
+            print(f"📊 State: {self.get_power_state_emoji(data['power_state'])} {data['power_state']}")
             
-            # Battery Section
-            print("\n🔋 BATTERY STATUS")
-            soc = data.get('soc', 0)
-            voltage = data.get('voltage', 0)
-            charging = data.get('charging', False)
-            capacity = data.get('capacity_kwh', 0)
-            
-            charge_status = "🔌 Charging" if charging else "📉 Discharging"
-            print(f"   State:        {charge_status}")
-            print(f"   SOC:          {soc:.1f}%  {self.create_bar(soc)}")
-            print(f"   Voltage:      {voltage:.2f} V")
-            print(f"   Capacity:     {capacity:.1f} kWh")
-            
-            # Grid Section
-            print("\n🌊 GRID STATUS")
-            freq = data.get('freq', 0)
-            power_state = data.get('power_state', 'unknown')
-            health = data.get('health_status', 'unknown')
-            
-            print(f"   Frequency:    {freq:.3f} Hz")
-            print(f"   Power State:  {self.get_power_state_emoji(power_state)} {power_state.title()}")
-            print(f"   Health:       {self.get_health_emoji(health)} {health.title()}")
-            
-            # System Resources Section
-            print("\n💻 SYSTEM RESOURCES")
-            cpu_freq = data.get('cpu_freq_mhz', 0)
-            mem_percent = data.get('memory_percent', 0)
-            mem_used = data.get('memory_used_gb', 0)
-            
-            print(f"   CPU Freq:     {cpu_freq:.0f} MHz")
-            print(f"   Memory:       {mem_percent:.1f}%  {self.create_bar(mem_percent)}")
-            print(f"   Memory Used:  {mem_used:.2f} GB")
-            
-            # Network Section
-            if 'network_sent_mb' in data:
-                print("\n🌐 NETWORK")
-                net_sent = data.get('network_sent_mb', 0)
-                net_recv = data.get('network_recv_mb', 0)
-                print(f"   Sent:         {net_sent:.2f} MB")
-                print(f"   Received:     {net_recv:.2f} MB")
-            
-            # Timestamp
-            timestamp = data.get('timestamp', '')
-            if timestamp:
-                print(f"\n🕐 Last Updated: {timestamp}")
-        
-        print("\n" + "═" * 80)
-        print("Press Ctrl+C to exit".center(80))
-        print("═" * 80)
-    
+            # Grid Status
+            print(f"\n🌊 Frequency: {data['freq']:.2f} Hz")
+            print(f"💚 Health: {self.get_health_emoji(data['health_status'])} {data['health_status']}")
+
     async def connect_and_monitor(self):
-        """Connect to gateway and monitor telemetry"""
-        retry_delay = 5
-        
+        """Connect to WebSocket server and monitor data"""
         while True:
             try:
-                print(f"🔄 Connecting to gateway at {self.server_uri}...")
-                
                 async with websockets.connect(self.server_uri) as websocket:
-                    print(f"✅ Connected! Starting monitor...\n")
+                    print(f"🔗 Connected to {self.server_uri}")
                     
-                    # Send a monitoring subscription message
-                    subscribe_msg = {
-                        'type': 'monitor',
-                        'client': 'dashboard',
-                        'timestamp': datetime.utcnow().isoformat() + 'Z'
-                    }
-                    await websocket.send(json.dumps(subscribe_msg))
+                    # Send initial identification message as monitor client
+                    await websocket.send(json.dumps({
+                        "type": "monitor",
+                        "client_type": "dashboard",
+                        "timestamp": datetime.utcnow().isoformat() + 'Z'
+                    }))
                     
                     async for message in websocket:
                         try:
                             data = json.loads(message)
                             
-                            # Update latest data
-                            dc_id = data.get('dc_id', 'unknown')
-                            self.latest_data[dc_id] = data
-                            self.message_count += 1
-                            
-                            # Update display
-                            self.display_dashboard()
-                            
+                            # Extract dc_id and update latest data
+                            if isinstance(data, dict) and 'dc_id' in data:
+                                dc_id = data['dc_id']
+                                self.latest_data[dc_id] = data
+                                self.message_count += 1
+                                
+                                # Update display after each message
+                                self.display_dashboard()
+                                
                         except json.JSONDecodeError as e:
-                            print(f"❌ Invalid JSON: {e}")
-                            
-            except ConnectionRefusedError:
-                self.clear_screen()
-                print(f"❌ Connection refused. Is the gateway running?")
-                print(f"⏳ Retrying in {retry_delay} seconds...")
-                await asyncio.sleep(retry_delay)
-                
+                            print(f"❌ Invalid JSON received: {e}")
+                            continue
+                        
+            # If we get here, connection was closed
+                    print("📡 Connection lost. Reconnecting in 5 seconds...")
+                    await asyncio.sleep(5)
+            
+            except websockets.exceptions.ConnectionClosed:
+                print("📡 Connection lost. Reconnecting in 5 seconds...")
+                await asyncio.sleep(5)
             except Exception as e:
-                self.clear_screen()
                 print(f"❌ Error: {e}")
-                print(f"⏳ Retrying in {retry_delay} seconds...")
-                await asyncio.sleep(retry_delay)
-
+                await asyncio.sleep(5)
 
 def main():
     """Entry point"""
@@ -206,13 +153,7 @@ def main():
     try:
         asyncio.run(dashboard.connect_and_monitor())
     except KeyboardInterrupt:
-        dashboard.clear_screen()
-        print("\n⛔ Dashboard stopped by user")
-        print("\n📊 Session Statistics:")
-        print(f"   Total Messages: {dashboard.message_count}")
-        print(f"   Uptime: {dashboard.format_uptime()}")
-        print(f"   Nodes Monitored: {len(dashboard.latest_data)}")
-
+        print("\n👋 Dashboard stopped by user")
 
 if __name__ == "__main__":
     main()

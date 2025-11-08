@@ -17,6 +17,7 @@ class DataCenterGateway:
         self.host = host
         self.port = port
         self.connected_nodes = {}
+        self.monitor_clients = set()  # Track connected monitor clients
         self.telemetry_buffer = defaultdict(list)
         self.max_buffer_size = 100
         
@@ -158,13 +159,26 @@ class DataCenterGateway:
         print(f"📤 Sent command to {dc_id}: {command_type}")
     
     async def handle_edge_node(self, websocket, path):
-        """Handle connection from an edge node"""
-        node_id = None
-        
+        """Handle connection from an edge node or monitor"""
         try:
-            # Get initial message to identify node
+            # Get initial message to identify client type
             initial_message = await websocket.recv()
             initial_data = json.loads(initial_message)
+            
+            # Handle monitor clients
+            if initial_data.get('client_type') == 'dashboard':
+                print(f"\n📊 Monitor client connected")
+                self.monitor_clients.add(websocket)
+                try:
+                    while True:
+                        # Keep connection alive
+                        await websocket.recv()
+                except:
+                    self.monitor_clients.remove(websocket)
+                    print("📊 Monitor client disconnected")
+                return
+            
+            # Handle edge nodes
             node_id = initial_data.get('dc_id', 'unknown')
             
             self.connected_nodes[node_id] = {
@@ -220,6 +234,13 @@ class DataCenterGateway:
               f"🌊{normalized['freq']}Hz | "
               f"💚{normalized['health_status']}")
         
+        # Broadcast to all monitor clients
+        for monitor in self.monitor_clients.copy():
+            try:
+                await monitor.send(json.dumps(normalized))
+            except:
+                self.monitor_clients.remove(monitor)
+        
         # Check if we need to send dispatch commands
         await self.check_and_dispatch(normalized, websocket)
         
@@ -239,7 +260,7 @@ class DataCenterGateway:
                 target_power_kw=5.0,
                 reason='Low SOC detected'
             )
-        elif normalized['soc'] > 95 and normalized['load'] > 80:
+        elif normalized['soc'] > 80:
             await self.send_dispatch_command(
                 websocket, dc_id, 'setpoint',
                 action='discharge',
