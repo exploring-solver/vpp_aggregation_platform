@@ -65,6 +65,17 @@ app.use('/api/aggregate', authenticateToken, aggregateRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Handle authentication errors from express-jwt
+  if (err.name === 'UnauthorizedError' || err.name === 'JsonWebTokenError') {
+    logger.warn(`Authentication error: ${err.message}`);
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: err.message || 'Invalid or missing authentication token',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // Handle other errors
   logger.error('Error:', err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',

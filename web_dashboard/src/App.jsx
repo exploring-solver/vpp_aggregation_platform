@@ -6,6 +6,8 @@ import Nodes from './pages/Nodes'
 import NodeDetail from './pages/NodeDetail'
 import Dispatch from './pages/Dispatch'
 import Forecasts from './pages/Forecasts'
+import DGridOperator from './pages/DGridOperator'
+import DataCenterOperator from './pages/DataCenterOperator'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -39,6 +41,8 @@ function App() {
         <Route path="nodes/:dcId" element={<NodeDetail />} />
         <Route path="dispatch" element={<Dispatch />} />
         <Route path="forecasts" element={<Forecasts />} />
+        <Route path="dgrid-operator" element={<DGridOperator />} />
+        <Route path="data-center-operator" element={<DataCenterOperator />} />
       </Route>
     </Routes>
   )
