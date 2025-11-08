@@ -390,23 +390,32 @@ class EdgeNodeController:
                 await asyncio.sleep(retry_delay)
 
 
+def generate_unique_dc_id():
+    """Generate a unique data center ID using timestamp and random component"""
+    timestamp = int(time.time() * 1000)  # millisecond timestamp
+    random_component = random.randint(1000, 9999)
+    return f"DC{timestamp % 10000}{random_component}"
+
 def main():
     """Entry point"""
     # Get local IP for display
     hostname = sock.gethostname()
     local_ip = sock.gethostbyname(hostname)
     
+    # Generate unique DC ID
+    dc_id = generate_unique_dc_id()
+    
     print("=" * 60)
     print("🏭 EDGE NODE CONTROLLER - IoT Client")
     print("=" * 60)
     print(f"Hostname: {hostname}")
     print(f"Local IP: {local_ip}")
-    print(f"Data Center ID: DC001")
+    print(f"Data Center ID: {dc_id}")
     print("=" * 60)
     
     # Create and run edge node
     edge_node = EdgeNodeController(
-        dc_id="DC001",
+        dc_id=dc_id,
         server_uri="ws://localhost:8765"
     )
     
