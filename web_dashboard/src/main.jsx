@@ -52,10 +52,10 @@ const AppWithAuth = () => {
       clientId={auth0ClientId}
       authorizationParams={{
         redirect_uri: window.location.origin,
-        audience: auth0Audience,
+        audience: auth0Audience || undefined, // Only set if configured
       }}
       onRedirectCallback={onRedirectCallback}
-      useRefreshTokens={true}
+      useRefreshTokens={false} // Disable refresh tokens to avoid errors
       cacheLocation="localstorage"
     >
       <QueryClientProvider client={queryClient}>
