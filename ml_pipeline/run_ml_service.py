@@ -14,10 +14,10 @@ sys.path.insert(0, str(src_dir))
 
 # Now run the main application
 if __name__ == "__main__":
-    from src.api import main as app
+    from api import main as app
     import uvicorn
-    from config import config
-    from src.utils import logger
+    from config.config import config
+    from utils.logger import logger
     
     logger.info("🚀 Starting ML Pipeline Service...")
     logger.info(f"📂 ML Pipeline Root: {ml_pipeline_root}")
