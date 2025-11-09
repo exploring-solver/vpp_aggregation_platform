@@ -1,6 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
-import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, Brain, Target, Lightbulb, Power, DollarSign } from 'lucide-react'
 
 export default function Layout() {
   const { user, logout } = useAuth0()
@@ -27,7 +27,7 @@ export default function Layout() {
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">VPP Platform</h1>
+                <h1 className="text-xl font-bold text-white">Vusio</h1>
                 <p className="text-xs text-primary-100">Grid Flexibility Aggregation</p>
               </div>
             </div>
