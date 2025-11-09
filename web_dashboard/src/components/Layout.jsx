@@ -1,6 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
-import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, Brain, Target, Lightbulb, Power } from 'lucide-react'
+import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, Brain, Target, Lightbulb, Power, DollarSign } from 'lucide-react'
 
 export default function Layout() {
   const { user, logout } = useAuth0()
