@@ -2,9 +2,284 @@ import { useEffect, useState } from 'react'
 import { 
   Activity, Battery, Zap, Server, Database, TrendingUp, 
   DollarSign, BarChart3, Settings, FileText, Clock, 
-  AlertCircle, CheckCircle2, XCircle
+  AlertCircle, CheckCircle2, XCircle, Plus, Building2
 } from 'lucide-react'
 import { useAuthToken } from '../services/auth'
+
+// Energy Contracts Marketplace Component
+function EnergyContractsMarketplace({ nodeId, makeApiCall, nodeCapacity }) {
+  const [contracts, setContracts] = useState([])
+  const [myBids, setMyBids] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showBidForm, setShowBidForm] = useState(false)
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [bidForm, setBidForm] = useState({
+    capacity_mw: '',
+    price_per_mw: ''
+  })
+
+  useEffect(() => {
+    fetchContracts()
+    fetchMyBids()
+    const interval = setInterval(() => {
+      fetchContracts()
+      fetchMyBids()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchContracts = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      const response = await makeApiCall(`${baseUrl}/api/marketplace/contracts?status=open&limit=10`)
+      if (response.ok) {
+        const result = await response.json()
+        setContracts(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching contracts:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchMyBids = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      const response = await makeApiCall(`${baseUrl}/api/marketplace/bids?operator_email=amansharma12607@gmail.com&limit=10`)
+      if (response.ok) {
+        const result = await response.json()
+        setMyBids(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching bids:', error)
+    }
+  }
+
+  const handlePlaceBid = async (e) => {
+    e.preventDefault()
+    if (!selectedContract) return
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      const response = await makeApiCall(`${baseUrl}/api/marketplace/contracts/${selectedContract.contract_id}/bids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          capacity_mw: parseFloat(bidForm.capacity_mw),
+          price_per_mw: parseFloat(bidForm.price_per_mw),
+          operator_email: 'amansharma12607@gmail.com',
+          node_id: nodeId
+        })
+      })
+
+      if (response.ok) {
+        alert('Bid placed successfully!')
+        setShowBidForm(false)
+        setSelectedContract(null)
+        setBidForm({ capacity_mw: '', price_per_mw: '' })
+        fetchContracts()
+        fetchMyBids()
+      } else {
+        const error = await response.json()
+        alert('Failed to place bid: ' + (error.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error placing bid: ' + error.message)
+    }
+  }
+
+  const openBidForm = (contract) => {
+    setSelectedContract(contract)
+    setBidForm({
+      capacity_mw: Math.min(contract.required_capacity_mw, (nodeCapacity || 5000) / 1000).toFixed(2), // Use node capacity if available
+      price_per_mw: (contract.max_price_per_mw * 0.95).toFixed(2) // Start at 95% of max
+    })
+    setShowBidForm(true)
+  }
+
+  if (loading) {
+    return <div className="text-center py-4 text-gray-500">Loading contracts...</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Available Contracts */}
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <Building2 className="w-5 h-5 mr-2 text-primary-600" />
+          Available Energy Contracts
+        </h3>
+        {contracts.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No open contracts available</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {contracts.map((contract) => (
+              <div key={contract.contract_id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900">{contract.title || contract.contract_id}</h4>
+                      <span className="badge badge-success">Open</span>
+                    </div>
+                    {contract.description && (
+                      <p className="text-sm text-gray-600 mb-2">{contract.description}</p>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-600">Required:</span>
+                        <span className="font-semibold ml-1">{contract.required_capacity_mw} MW</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Max Price:</span>
+                        <span className="font-semibold ml-1">₹{contract.max_price_per_mw}/MW</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Duration:</span>
+                        <span className="font-semibold ml-1">{contract.duration_minutes} min</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Bids:</span>
+                        <span className="font-semibold ml-1">{contract.bid_count || 0}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      <span>Vendor: {contract.vendor_name}</span>
+                      <span className="ml-3">
+                        Posted: {new Date(contract.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => openBidForm(contract)}
+                    className="ml-4 btn btn-primary flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Place Bid
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* My Bids */}
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4">My Bids</h3>
+        {myBids.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No bids placed yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-3 text-sm font-semibold">Contract</th>
+                  <th className="text-left py-2 px-3 text-sm font-semibold">Capacity</th>
+                  <th className="text-left py-2 px-3 text-sm font-semibold">Price</th>
+                  <th className="text-left py-2 px-3 text-sm font-semibold">Status</th>
+                  <th className="text-left py-2 px-3 text-sm font-semibold">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myBids.map((bid) => (
+                  <tr key={bid.bid_id} className="border-b border-gray-100">
+                    <td className="py-2 px-3 text-sm">{bid.contract?.title || bid.contract_id}</td>
+                    <td className="py-2 px-3 text-sm">{bid.capacity_mw} MW</td>
+                    <td className="py-2 px-3 text-sm">₹{bid.price_per_mw}/MW</td>
+                    <td className="py-2 px-3 text-sm">
+                      <span className={`badge ${
+                        bid.status === 'accepted' ? 'badge-success' :
+                        bid.status === 'rejected' ? 'badge-error' :
+                        'badge-warning'
+                      }`}>
+                        {bid.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-sm text-gray-500">
+                      {new Date(bid.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Bid Form Modal */}
+      {showBidForm && selectedContract && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4">Place Bid on Contract</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {selectedContract.title || selectedContract.contract_id}
+            </p>
+            <form onSubmit={handlePlaceBid} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Capacity (MW)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.1"
+                  max={selectedContract.required_capacity_mw}
+                  value={bidForm.capacity_mw}
+                  onChange={(e) => setBidForm({...bidForm, capacity_mw: e.target.value})}
+                  className="input w-full"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Max: {selectedContract.required_capacity_mw} MW
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Price per MW (₹)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={selectedContract.max_price_per_mw}
+                  value={bidForm.price_per_mw}
+                  onChange={(e) => setBidForm({...bidForm, price_per_mw: e.target.value})}
+                  className="input w-full"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Max: ₹{selectedContract.max_price_per_mw}/MW
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="btn btn-primary flex-1">
+                  Place Bid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBidForm(false)
+                    setSelectedContract(null)
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function DataCenterOperator() {
   const [data, setData] = useState(null)
@@ -543,6 +818,15 @@ export default function DataCenterOperator() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Energy Contracts Marketplace Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <DollarSign className="w-5 h-5 mr-2 text-primary-600" />
+          Energy Contracts Marketplace
+        </h2>
+        <EnergyContractsMarketplace nodeId={nodeId} makeApiCall={makeApiCall} nodeCapacity={data?.nodeCapacity} />
       </div>
 
       {/* Compliance & Settlement Section */}
