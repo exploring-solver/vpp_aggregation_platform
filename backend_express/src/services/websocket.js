@@ -40,8 +40,11 @@ export function setupWebSocket(wss) {
   });
 
   // Subscribe to Redis channels and broadcast to WebSocket clients
-  (async () => {
+  // Use setTimeout to ensure Redis handler is fully initialized
+  setTimeout(async () => {
     try {
+      logger.info('Setting up WebSocket Redis subscriptions...');
+      
       await subscribeChannel('telemetry:new', (data) => {
         broadcastToClients({
           type: 'telemetry',
@@ -73,8 +76,9 @@ export function setupWebSocket(wss) {
       logger.info('WebSocket server configured with Redis subscriptions');
     } catch (err) {
       logger.error('Failed to set up Redis subscriptions:', err);
+      logger.error('Stack trace:', err.stack);
     }
-  })();
+  }, 100); // Small delay to ensure Redis handler is ready
 }
 
 function broadcastToClients(message) {

@@ -40,10 +40,10 @@ export async function handleTelemetryData(telemetry, nodeAuth = null) {
     // Publish to Redis for real-time subscribers (with error handling)
     try {
       await publishMessage('telemetry:new', enrichedData);
-      logger.debug(`Telemetry published to Redis for node ${telemetry.dc_id}`);
+      logger.debug(`Telemetry published to Redis channel 'telemetry:new' for node ${telemetry.dc_id}`);
     } catch (pubError) {
       logger.warn(`Redis publishing failed for node ${telemetry.dc_id}: ${pubError.message}`);
-      // Continue processing even if publish fails
+      // Continue processing even if publish fails - data is still in MongoDB and cache
     }
 
     logger.info(`Telemetry processed successfully for node ${telemetry.dc_id}`);
