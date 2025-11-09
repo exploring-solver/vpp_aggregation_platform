@@ -32,11 +32,54 @@ def generate_dc_id():
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
+def is_anomaly(telemetry_window):
+    """Check if there's an anomaly in the telemetry window"""
+    if not telemetry_window:
+        return False
+    # Check for spikes in power_kw or abnormal frequency
+    for data in telemetry_window:
+        if data['meta'].get('event') == 'spike':
+            return True
+        if abs(data['power_kw']) > 50.0:  # Large power deviation
+            return True
+        if abs(data['freq'] - 50.0) > 0.5 and abs(data['freq'] - 60.0) > 0.5:  # Frequency deviation
+            return True
+    return False
+
+def aggregate_telemetry(telemetry_window):
+    """Aggregate telemetry data for a time window"""
+    if not telemetry_window:
+        return None
+    
+    # Take the last timestamp and dc_id from the window
+    result = {
+        "dc_id": telemetry_window[-1]["dc_id"],
+        "timestamp": telemetry_window[-1]["timestamp"],
+    }
+    
+    # Calculate averages for numeric fields
+    numeric_fields = ['cpu_usage', 'network_mb_sent', 'network_mb_recv', 
+                     'soc', 'power_kw', 'freq', 'load_factor']
+    
+    for field in numeric_fields:
+        values = [x[field] for x in telemetry_window]
+        result[field] = round(sum(values) / len(values), 3)
+    
+    # Aggregate meta information
+    result["meta"] = {
+        "hostname": telemetry_window[-1]["meta"]["hostname"],
+        "event": "spike" if any(x["meta"]["event"] == "spike" for x in telemetry_window) else "",
+        "temperature_c": round(sum(x["meta"]["temperature_c"] for x in telemetry_window) / len(telemetry_window), 1),
+        "samples_aggregated": len(telemetry_window)
+    }
+    
+    return result
+
 def make_time_series_for_node(dc_id, start_dt, samples, interval_s,
                               capacity_kwh=100.0, base_load_kw=10.0,
                               diurnal_amp_kw=8.0, noise_kw=1.5,
                               seed=None):
-    """Yield telemetry dicts for one node"""
+    """Generate and aggregate telemetry data for one node"""
     if seed is not None:
         rnd = random.Random(seed)
     else:
@@ -44,6 +87,10 @@ def make_time_series_for_node(dc_id, start_dt, samples, interval_s,
     soc = rnd.uniform(40.0, 95.0)  # initial SOC %
     # small per-node bias
     freq_nominal = rnd.choice([50.0, 60.0])
+    
+    # Buffer to store 5-second readings before aggregation
+    telemetry_buffer = []
+    
     for i in range(samples):
         ts = start_dt + timedelta(seconds=i * interval_s)
         hour = ts.hour + ts.minute / 60.0
@@ -93,7 +140,48 @@ def make_time_series_for_node(dc_id, start_dt, samples, interval_s,
             "load_factor": round(load_factor, 3),
             "meta": meta
         }
-        yield telemetry
+        
+        telemetry_buffer.append(telemetry)
+        
+        # Determine aggregation window size
+        FIVE_MIN_SAMPLES = 300 // interval_s  # 300 seconds = 5 minutes
+        ONE_MIN_SAMPLES = 60 // interval_s    # 60 seconds = 1 minute
+        
+        # Check if we have enough samples for aggregation
+        if len(telemetry_buffer) >= FIVE_MIN_SAMPLES:
+            # Check for anomalies in the last minute of data
+            last_minute_data = telemetry_buffer[-ONE_MIN_SAMPLES:]
+            if is_anomaly(last_minute_data):
+                # If anomaly detected, aggregate in 1-minute windows
+                while len(telemetry_buffer) >= ONE_MIN_SAMPLES:
+                    window = telemetry_buffer[:ONE_MIN_SAMPLES]
+                    telemetry_buffer = telemetry_buffer[ONE_MIN_SAMPLES:]
+                    aggregated = aggregate_telemetry(window)
+                    if aggregated:
+                        yield aggregated
+            else:
+                # No anomaly, aggregate in 5-minute windows
+                window = telemetry_buffer[:FIVE_MIN_SAMPLES]
+                telemetry_buffer = telemetry_buffer[FIVE_MIN_SAMPLES:]
+                aggregated = aggregate_telemetry(window)
+                if aggregated:
+                    yield aggregated
+    
+    # Handle any remaining data in buffer
+    if telemetry_buffer:
+        if is_anomaly(telemetry_buffer[-ONE_MIN_SAMPLES:] if len(telemetry_buffer) >= ONE_MIN_SAMPLES else telemetry_buffer):
+            # Aggregate remaining data in 1-minute chunks
+            while len(telemetry_buffer) >= ONE_MIN_SAMPLES:
+                window = telemetry_buffer[:ONE_MIN_SAMPLES]
+                telemetry_buffer = telemetry_buffer[ONE_MIN_SAMPLES:]
+                aggregated = aggregate_telemetry(window)
+                if aggregated:
+                    yield aggregated
+        else:
+            # Aggregate all remaining data
+            aggregated = aggregate_telemetry(telemetry_buffer)
+            if aggregated:
+                yield aggregated
 
 def generate_dataset(output_path, nodes=10, duration_hours=24, interval_s=60,
                      capacity_kwh=100.0, base_load_kw=10.0, diurnal_amp_kw=8.0,
@@ -103,6 +191,7 @@ def generate_dataset(output_path, nodes=10, duration_hours=24, interval_s=60,
     samples_per_node = int((duration_hours * 3600) // interval_s)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     # open writer based on format
+    written = 0
     if format == "csv":
         fieldnames = ["dc_id", "timestamp", "cpu_usage", "network_mb_sent",
                       "network_mb_recv", "soc", "power_kw", "freq", "load_factor", "meta"]
@@ -118,6 +207,7 @@ def generate_dataset(output_path, nodes=10, duration_hours=24, interval_s=60,
                     row_copy = dict(row)
                     row_copy["meta"] = json.dumps(row_copy.get("meta", {}))
                     writer.writerow(row_copy)
+                    written += 1
     else:
         # jsonl
         with open(output_path, "w") as f:
@@ -127,9 +217,14 @@ def generate_dataset(output_path, nodes=10, duration_hours=24, interval_s=60,
                 for row in make_time_series_for_node(dc_id, start_dt, samples_per_node, interval_s,
                                                      capacity_kwh, base_load_kw, diurnal_amp_kw, seed=node_seed):
                     f.write(json.dumps(row) + "\n")
-    print(f"Generated {nodes} nodes x {samples_per_node} samples = {nodes * samples_per_node} records -> {output_path}")
+                    written += 1
+
+    # Report actual aggregated records written and original raw samples estimate
+    raw_samples = nodes * samples_per_node
+    print(f"Generated {nodes} nodes x {samples_per_node} raw samples = {raw_samples} input samples -> {written} aggregated records written -> {output_path}")
+    return written
 # Hard-coded output for 30 days @ 5s sampling
-OUTPUT_PATH = "data/telemetry_10nodes_30days_5s.csv"
+OUTPUT_PATH = "data/telemetry_10nodes_30days_aggregated.csv"
 
 def cli():
     parser = argparse.ArgumentParser(description="Generate synthetic TelemetryData dataset")
@@ -141,12 +236,15 @@ def cli():
     parser.add_argument("--base-load", type=float, default=10.0, help="Base load (kW) per node")
     parser.add_argument("--diurnal-amp", type=float, default=8.0, help="Diurnal amplitude (kW)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--debug", action="store_true", help="Print small sample of written aggregated records and counts")
     args = parser.parse_args()
     fmt = "csv" if OUTPUT_PATH.lower().endswith(".csv") else "jsonl"
-    generate_dataset(OUTPUT_PATH, nodes=args.nodes, duration_hours=args.hours,
+    written = generate_dataset(OUTPUT_PATH, nodes=args.nodes, duration_hours=args.hours,
                       interval_s=args.interval, capacity_kwh=args.capacity,
                       base_load_kw=args.base_load, diurnal_amp_kw=args.diurnal_amp,
                       seed=args.seed, format=fmt)
+    if args.debug:
+        print(f"[debug] aggregated records written: {written}")
 
 if __name__ == "__main__":
     cli()
