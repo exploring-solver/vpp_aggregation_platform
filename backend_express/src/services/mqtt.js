@@ -49,16 +49,14 @@ export async function initMQTT() {
     mqttClient.on('message', async (topic, message) => {
       try {
         const data = JSON.parse(message.toString());
-        logger.debug(`MQTT message received on ${topic} from node ${topic.split('/')[1]}`);
+        const nodeId = topic.split('/')[1];
 
         if (topic.includes('/telemetry')) {
-          const dcId = topic.split('/')[1];
           // Handle telemetry data - this will publish to Redis
-          await handleTelemetryData({ ...data, dc_id: dcId });
-          logger.debug(`Telemetry processed and published to Redis for node ${dcId}`);
+          await handleTelemetryData({ ...data, dc_id: nodeId });
+          logger.info(`✓ Telemetry received via MQTT from node ${nodeId} and processed`);
         } else if (topic.includes('/status')) {
-          const dcId = topic.split('/')[1];
-          logger.debug(`Status update from node ${dcId}:`, data);
+          logger.debug(`Status update from node ${nodeId}:`, data);
         }
       } catch (error) {
         logger.error(`Error processing MQTT message from ${topic}:`, error);
