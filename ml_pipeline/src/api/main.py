@@ -228,7 +228,7 @@ async def root():
             },
             "intelligence": {
                 "type": "LLM-powered strategic decisions",
-                "provider": "OpenAI GPT-4"
+                "provider": "Groq Mixtral-8x7b"
             },
             "control": {
                 "type": "Autonomous power flow control",

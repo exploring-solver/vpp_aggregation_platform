@@ -7,34 +7,35 @@ from utils.logger import logger
 from config.config import config
 import json
 
-# Make OpenAI optional
+# Make Groq optional
 try:
-    from openai import AsyncOpenAI
-    OPENAI_AVAILABLE = True
+    from groq import AsyncGroq
+    GROQ_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
+    GROQ_AVAILABLE = False
 
 class IntelligentStrategyAgent:
     """
     LLM-powered agent for high-level strategic decisions and explanations
-    Falls back to rule-based logic if OpenAI unavailable
+    Falls back to rule-based logic if Groq is unavailable
     """
     
     def __init__(self):
         self.client = None
         self.llm_enabled = False
+        self.model = "openai/gpt-oss-20b"  # Groq's Mixtral model
         
-        # Try to initialize OpenAI
-        if OPENAI_AVAILABLE and config.OPENAI_API_KEY:
+        # Try to initialize Groq
+        if GROQ_AVAILABLE and config.OPENAI_API_KEY:
             try:
-                self.client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+                self.client = AsyncGroq(api_key=config.OPENAI_API_KEY)
                 self.llm_enabled = True
-                logger.info("✅ LLM agent enabled (OpenAI)")
+                logger.info("✅ LLM agent enabled (Groq)")
             except Exception as e:
-                logger.warning(f"⚠️  Could not initialize OpenAI: {e}")
+                logger.warning(f"⚠️  Could not initialize Groq: {e}")
                 self.llm_enabled = False
         else:
-            logger.info("📋 LLM agent using rule-based fallback (no OpenAI API key)")
+            logger.info("📋 LLM agent using rule-based fallback (no Groq API key)")
         
         self.system_prompt = """
 You are an expert AI agent managing a Virtual Power Plant (VPP) for data centers in India.
@@ -60,7 +61,7 @@ Explain this decision in 2-3 sentences for a data center operator.
 """
                 
                 response = await self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.model,
                     messages=[
                         {"role": "system", "content": self.system_prompt},
                         {"role": "user", "content": prompt}
@@ -69,6 +70,7 @@ Explain this decision in 2-3 sentences for a data center operator.
                     max_tokens=150
                 )
                 
+                # Groq response format is similar to OpenAI
                 return response.choices[0].message.content
             except Exception as e:
                 logger.error(f"Error generating explanation: {e}")
@@ -111,12 +113,11 @@ Should we participate? Respond as JSON:
 """
                 
                 response = await self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.model,
                     messages=[
-                        {"role": "system", "content": self.system_prompt},
+                        {"role": "system", "content": self.system_prompt + "\nAlways respond in valid JSON format."},
                         {"role": "user", "content": prompt}
                     ],
-                    response_format={"type": "json_object"},
                     temperature=0.3,
                     max_tokens=200
                 )
@@ -234,12 +235,11 @@ Provide 3 actionable suggestions as JSON array of strings.
 """
                 
                 response = await self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.model,
                     messages=[
-                        {"role": "system", "content": self.system_prompt},
+                        {"role": "system", "content": self.system_prompt + "\nProvide suggestions as a JSON array of strings."},
                         {"role": "user", "content": prompt}
                     ],
-                    response_format={"type": "json_object"},
                     temperature=0.7,
                     max_tokens=300
                 )
@@ -273,7 +273,7 @@ Generate a brief 2-sentence executive summary focusing on revenue and key insigh
 """
                 
                 response = await self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.model,
                     messages=[
                         {"role": "system", "content": self.system_prompt},
                         {"role": "user", "content": prompt}

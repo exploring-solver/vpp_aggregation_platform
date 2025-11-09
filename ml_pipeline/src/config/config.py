@@ -8,7 +8,8 @@ class Config:
     
     DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", 0.1))
     
-    RETRAIN_INTERVAL_HOURS = int(os.getenv("RETRAIN_INTERVAL_HOURS", 16))
+    # Hours between retraining (1-23, defaults to 12 for twice daily)
+    RETRAIN_INTERVAL_HOURS = min(23, int(os.getenv("RETRAIN_INTERVAL_HOURS", 12)))
     
     # ============================================================================
     # DATABASE CONFIGURATION
