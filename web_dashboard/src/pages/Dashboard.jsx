@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Activity, Battery, Zap, Server, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { useAuthToken } from '../services/auth'
+import websocketService from '../services/websocket'
 
 export default function Dashboard() {
   const [aggregateData, setAggregateData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [powerHistory, setPowerHistory] = useState([]) // 24h power output history
   const { makeApiCall, isTokenReady } = useAuthToken()
 
   console.log('Dashboard: Component mounted/re-rendered')
@@ -56,11 +59,64 @@ export default function Dashboard() {
   useEffect(() => {
     fetchAggregateData();
     
-    // Set up polling for real-time updates every 10 seconds
+    // Connect to WebSocket for real-time updates
+    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:3001'}`
+    websocketService.connect(wsUrl)
+    
+    // Subscribe to aggregate updates
+    const unsubscribeAggregate = websocketService.subscribe('aggregate', (data) => {
+      if (data && data.total_power_kw !== undefined) {
+        setPowerHistory(prev => {
+          const newPoint = {
+            time: new Date().toLocaleTimeString(),
+            power: data.total_power_kw || 0,
+            timestamp: new Date().toISOString()
+          }
+          // Keep last 144 points (24h at 10min intervals) or 288 points (24h at 5min intervals)
+          return [...prev.slice(-287), newPoint]
+        })
+      }
+    })
+    
+    // Subscribe to telemetry for power updates
+    const unsubscribeTelemetry = websocketService.subscribe('telemetry', (data) => {
+      // Update power history from individual node telemetry
+      if (data && data.power_kw !== undefined) {
+        setPowerHistory(prev => {
+          const newPoint = {
+            time: new Date().toLocaleTimeString(),
+            power: data.power_kw || 0,
+            timestamp: new Date().toISOString()
+          }
+          return [...prev.slice(-287), newPoint]
+        })
+      }
+    })
+    
+    // Set up polling for aggregate data every 10 seconds (fallback)
     const interval = setInterval(fetchAggregateData, 10000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval)
+      unsubscribeAggregate()
+      unsubscribeTelemetry()
+    }
   }, [makeApiCall])
+  
+  // Update power history when aggregate data changes
+  useEffect(() => {
+    if (aggregateData && aggregateData.total_power_kw !== undefined) {
+      setPowerHistory(prev => {
+        const newPoint = {
+          time: new Date().toLocaleTimeString(),
+          power: aggregateData.total_power_kw || 0,
+          timestamp: new Date().toISOString()
+        }
+        // Keep last 288 points (24h at 5min intervals)
+        return [...prev.slice(-287), newPoint]
+      })
+    }
+  }, [aggregateData])
 
   if (loading) {
     return (
@@ -231,17 +287,42 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-gray-900">Power Output (24h)</h3>
             <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-              <span>Real-time</span>
+              <div className={`w-2 h-2 rounded-full ${websocketService.isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+              <span>{websocketService.isConnected ? 'Live' : 'Polling'}</span>
             </div>
           </div>
-          <div className="h-80 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
-            <div className="text-center">
-              <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Chart will be implemented with Recharts</p>
-              <p className="text-sm text-gray-400 mt-1">Real-time power output visualization</p>
+          {powerHistory.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={powerHistory}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="time" 
+                  label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Area 
+                  type="monotone" 
+                  dataKey="power" 
+                  stroke="#3b82f6" 
+                  fill="#3b82f6" 
+                  fillOpacity={0.3} 
+                  name="Total Power (kW)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
+              <div className="text-center">
+                <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">Collecting power data...</p>
+                <p className="text-sm text-gray-400 mt-1">Real-time power output visualization</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div className="card">
           <h3 className="text-xl font-bold text-gray-900 mb-6">System Modules</h3>

@@ -37,13 +37,16 @@ export async function handleTelemetryData(telemetry, nodeAuth = null) {
       // Continue processing even if cache fails
     }
 
-    // Publish to Redis for real-time subscribers (with error handling)
+    // Publish to Redis and trigger callbacks directly (pub/sub disabled)
     try {
       await publishMessage('telemetry:new', enrichedData);
-      logger.debug(`Telemetry published to Redis for node ${telemetry.dc_id}`);
+      // Manually trigger callbacks instead of using Redis pub/sub
+      const { triggerChannelCallbacks } = await import('./redis.js');
+      triggerChannelCallbacks('telemetry:new', enrichedData);
+      logger.debug(`Telemetry published and callbacks triggered for node ${telemetry.dc_id}`);
     } catch (pubError) {
       logger.warn(`Redis publishing failed for node ${telemetry.dc_id}: ${pubError.message}`);
-      // Continue processing even if publish fails
+      // Continue processing even if publish fails - data is still in MongoDB and cache
     }
 
     logger.info(`Telemetry processed successfully for node ${telemetry.dc_id}`);

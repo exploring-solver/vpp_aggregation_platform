@@ -1,8 +1,8 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import psutil
+from contextlib import asynccontextmanager
 import asyncio
 import logging
 from datetime import datetime
@@ -16,7 +16,65 @@ from config import settings
 logging.basicConfig(level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="VPP Edge Node", version="1.0.0")
+# Global instances
+simulator = TelemetrySimulator(settings.NODE_ID)
+mqtt_client = None
+
+def handle_control_command(command: dict):
+    """Handle control commands from aggregator"""
+    try:
+        action = command.get('action')
+        params = command.get('params', {})
+        
+        logger.info(f"Received control command: {action} with params {params}")
+        
+        # Apply control action to simulator
+        simulator.apply_control(action, params)
+        
+    except Exception as e:
+        logger.error(f"Error handling control command: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    global mqtt_client
+    
+    # Startup
+    logger.info(f"Starting Edge Node {settings.NODE_ID} ({settings.NODE_NAME or 'Unnamed'})")
+    
+    # Initialize MQTT client - REQUIRED for telemetry transmission
+    if settings.MQTT_ENABLED:
+        try:
+            mqtt_client = MQTTClient(
+                broker_url=settings.MQTT_BROKER_URL,
+                dc_id=settings.NODE_ID,
+                on_control_callback=handle_control_command
+            )
+            await mqtt_client.connect()
+            logger.info("MQTT client connected successfully")
+        except Exception as e:
+            logger.error(f"MQTT connection failed: {e}")
+            logger.error("MQTT is required for telemetry transmission. Please check MQTT broker configuration.")
+            raise  # Fail fast if MQTT connection fails
+    else:
+        logger.error("MQTT is disabled but required for telemetry transmission. Set MQTT_ENABLED=true")
+        raise RuntimeError("MQTT_ENABLED must be true for telemetry transmission")
+    
+    # Start telemetry collection loop
+    asyncio.create_task(telemetry_loop())
+    logger.info("Telemetry loop started")
+    
+    # Log that we're using identifier-based M2M authentication
+    logger.info(f"M2M authentication configured for node {settings.NODE_ID} using identifier key")
+    
+    yield
+    
+    # Shutdown
+    if mqtt_client:
+        mqtt_client.disconnect()
+    logger.info("Edge node shutting down")
+
+app = FastAPI(title="VPP Edge Node", version="1.0.0", lifespan=lifespan)
 
 # CORS
 app.add_middleware(
@@ -26,10 +84,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global instances
-simulator = TelemetrySimulator(settings.NODE_ID)
-mqtt_client = None
 
 class ControlCommand(BaseModel):
     action: str  # charge, discharge, defer_load, hold
@@ -47,123 +101,37 @@ class TelemetryData(BaseModel):
     load_factor: float
     meta: Dict[str, Any] = {}
 
-@app.on_event("startup")
-async def startup_event():
-    global mqtt_client
-    
-    logger.info(f"Starting Edge Node {settings.NODE_ID} ({settings.NODE_NAME or 'Unnamed'})")
-    
-    # Initialize MQTT client if enabled
-    if settings.MQTT_ENABLED:
-        try:
-            mqtt_client = MQTTClient(
-                broker_url=settings.MQTT_BROKER_URL,
-                dc_id=settings.NODE_ID,
-                on_control_callback=handle_control_command
-            )
-            await mqtt_client.connect()
-            logger.info("MQTT client connected successfully")
-        except Exception as e:
-            logger.error(f"MQTT connection failed: {e}")
-            logger.warning("Continuing without MQTT - edge node will use HTTP-only mode")
-            mqtt_client = None
-    
-    # Start telemetry collection loop
-    asyncio.create_task(telemetry_loop())
-    logger.info("Telemetry loop started")
-    
-    # Log that we're using identifier-based M2M authentication
-    logger.info(f"M2M authentication configured for node {settings.NODE_ID} using identifier key")
-
-# -------------------------
-# Identifier-based authentication for M2M
-# -------------------------
-
-def get_auth_headers():
-    """Get authentication headers for API requests to aggregator."""
-    return {
-        "X-Node-ID": settings.NODE_ID,
-        "X-Node-Key": settings.NODE_KEY
-    }
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    if mqtt_client:
-        mqtt_client.disconnect()
-    logger.info("Edge node shutting down")
-
 async def telemetry_loop():
-    """Background task to collect and publish telemetry"""
-    http_failure_count = 0
-    max_http_failures = 5
+    """Background task to collect and publish telemetry via MQTT only"""
+    consecutive_failures = 0
+    max_failures = 5
     
     while True:
         try:
             telemetry = simulator.generate_telemetry()
             logger.debug(f"Generated telemetry: {telemetry}")
             
-            # Publish via MQTT if enabled
-            if mqtt_client and settings.MQTT_ENABLED:
-                await mqtt_client.publish_telemetry(telemetry)
-            
-            # Also send via HTTP if aggregator URL is configured
-            if settings.AGGREGATOR_URL and http_failure_count < max_http_failures:
+            # Publish via MQTT - REQUIRED for telemetry transmission
+            if mqtt_client and mqtt_client.connected:
                 try:
-                    await send_telemetry_http(telemetry)
-                    http_failure_count = 0  # Reset on success
+                    await mqtt_client.publish_telemetry(telemetry)
+                    consecutive_failures = 0  # Reset failure count on success
+                    logger.debug(f"Telemetry published via MQTT for node {settings.NODE_ID}")
                 except Exception as e:
-                    http_failure_count += 1
-                    if http_failure_count >= max_http_failures:
-                        logger.warning(f"HTTP telemetry disabled after {max_http_failures} consecutive failures. Check aggregator at {settings.AGGREGATOR_URL}")
-                    raise
+                    consecutive_failures += 1
+                    logger.error(f"MQTT publish failed ({consecutive_failures}/{max_failures}): {e}")
+                    
+                    if consecutive_failures >= max_failures:
+                        logger.critical(f"MQTT publish failed {max_failures} times consecutively. Telemetry transmission stopped.")
+                        # Continue loop but log error - don't crash the service
+            else:
+                logger.warning(f"MQTT client not connected. Skipping telemetry transmission for node {settings.NODE_ID}")
+                consecutive_failures += 1
                 
         except Exception as e:
             logger.error(f"Error in telemetry loop: {e}")
         
         await asyncio.sleep(settings.TELEMETRY_INTERVAL)
-
-async def send_telemetry_http(telemetry: dict):
-    """Send telemetry to aggregator via HTTP with identifier-based authentication."""
-    import httpx
-    try:
-        url = f"{settings.AGGREGATOR_URL}/api/telemetry"
-        logger.debug(f"Sending HTTP telemetry to {url}")
-        
-        # Use identifier-based authentication headers
-        headers = get_auth_headers()
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url,
-                json=telemetry,
-                headers=headers,
-                timeout=10.0
-            )
-            if response.status_code == 201:
-                logger.debug(f"HTTP telemetry sent successfully for node {settings.NODE_ID}")
-            else:
-                logger.warning(f"HTTP telemetry send failed: {response.status_code} - {response.text}")
-    except httpx.ConnectError as e:
-        logger.error(f"HTTP telemetry connection failed to {settings.AGGREGATOR_URL}: {e}")
-    except httpx.TimeoutException as e:
-        logger.error(f"HTTP telemetry timeout to {settings.AGGREGATOR_URL}: {e}")
-    except Exception as e:
-        logger.error(f"Error sending HTTP telemetry: {e}")
-        logger.debug(f"Full exception:", exc_info=True)
-
-def handle_control_command(command: dict):
-    """Handle control commands from aggregator"""
-    try:
-        action = command.get('action')
-        params = command.get('params', {})
-        
-        logger.info(f"Received control command: {action} with params {params}")
-        
-        # Apply control action to simulator
-        simulator.apply_control(action, params)
-        
-    except Exception as e:
-        logger.error(f"Error handling control command: {e}")
 
 @app.get("/")
 def read_root():
@@ -218,15 +186,13 @@ async def receive_control(command: ControlCommand):
 
 @app.post("/telemetry")
 async def manual_telemetry(data: TelemetryData):
-    """Manually push telemetry (for testing)"""
+    """Manually push telemetry via MQTT (for testing)"""
     try:
-        if mqtt_client and settings.MQTT_ENABLED:
+        if mqtt_client and mqtt_client.connected:
             await mqtt_client.publish_telemetry(data.dict())
-        
-        if settings.AGGREGATOR_URL:
-            await send_telemetry_http(data.dict())
-        
-        return {"success": True, "message": "Telemetry sent"}
+            return {"success": True, "message": "Telemetry sent via MQTT"}
+        else:
+            return {"success": False, "error": "MQTT client not connected"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

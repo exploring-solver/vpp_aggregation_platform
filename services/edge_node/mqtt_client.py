@@ -184,17 +184,24 @@ class MQTTClient:
             logger.error(f"Error processing MQTT message: {e}")
     
     async def publish_telemetry(self, telemetry: dict):
-        """Publish telemetry data"""
+        """Publish telemetry data via MQTT"""
         if not self.client or not self.connected:
             logger.warning("MQTT not connected, cannot publish telemetry")
-            return
+            raise Exception("MQTT not connected")
         
         topic = f"edge/{self.dc_id}/telemetry"
         message = json.dumps(telemetry)
         
-        result = self.client.publish(topic, message, qos=0)
-        if result.rc != mqtt.MQTT_ERR_SUCCESS:
-            logger.error(f"Failed to publish telemetry: {result.rc}")
+        try:
+            result = self.client.publish(topic, message, qos=0)
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                logger.debug(f"Telemetry published to {topic} successfully")
+            else:
+                logger.error(f"Failed to publish telemetry: error code {result.rc}")
+                raise Exception(f"MQTT publish failed with code {result.rc}")
+        except Exception as e:
+            logger.error(f"Exception during MQTT publish: {e}")
+            raise
     
     def disconnect(self):
         """Disconnect from broker"""

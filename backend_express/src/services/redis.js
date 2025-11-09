@@ -17,10 +17,12 @@ export async function connectRedis() {
     await redisClient.connect();
 
     // Subscriber client (separate connection for pub/sub)
+    // Note: Redis pub/sub subscriptions disabled due to node-redis v4 compatibility
     subscriberClient = redisClient.duplicate();
+    subscriberClient.on('error', (err) => logger.error('Redis Subscriber Error:', err));
     await subscriberClient.connect();
     
-    logger.info('Redis connections established');
+    logger.info('Redis connections established (pub/sub disabled, using direct callbacks)');
     
     return redisClient;
   } catch (error) {
@@ -75,15 +77,29 @@ export async function publishMessage(channel, message) {
   logger.debug(`Published to ${channel}:`, message);
 }
 
+// Pub/Sub subscription - DISABLED due to node-redis v4 compatibility issues
+// Using direct callback triggering instead of Redis pub/sub
+const channelCallbacks = new Map();
+
 export async function subscribeChannel(channel, callback) {
-  const client = getSubscriberClient();
-  await client.subscribe(channel, (message) => {
-    try {
-      const data = JSON.parse(message);
-      callback(data);
-    } catch {
-      callback(message);
+  // Store callback for manual triggering (no Redis subscription)
+  if (!channelCallbacks.has(channel)) {
+    channelCallbacks.set(channel, []);
+  }
+  channelCallbacks.get(channel).push(callback);
+  logger.debug(`Registered callback for channel: ${channel} (Redis pub/sub disabled)`);
+}
+
+// Manual trigger function to call callbacks (used instead of Redis pub/sub)
+export function triggerChannelCallbacks(channel, data) {
+  const callbacks = channelCallbacks.get(channel) || [];
+  callbacks.forEach(cb => {
+    if (typeof cb === 'function') {
+      try {
+        cb(data);
+      } catch (error) {
+        logger.error(`Error in callback for channel ${channel}:`, error);
+      }
     }
   });
-  logger.info(`Subscribed to Redis channel: ${channel}`);
 }

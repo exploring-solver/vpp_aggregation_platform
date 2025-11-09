@@ -1,20 +1,52 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Server, CheckCircle2, AlertCircle, Battery, Zap, Activity, Terminal, Settings, ExternalLink, Key } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { useAuthToken } from '../services/auth'
+import websocketService from '../services/websocket'
 
 export default function Nodes() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sshStatuses, setSshStatuses] = useState({})
+  const [telemetryData, setTelemetryData] = useState({}) // { nodeId: [{ timestamp, power_kw, soc, freq }] }
   const navigate = useNavigate()
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
     fetchNodes()
     const interval = setInterval(fetchNodes, 15000)
-    return () => clearInterval(interval)
+    
+    // Connect to WebSocket for real-time updates
+    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:3001'}`
+    websocketService.connect(wsUrl)
+    
+    // Subscribe to telemetry updates
+    const unsubscribeTelemetry = websocketService.subscribe('telemetry', (data) => {
+      if (data && data.dc_id) {
+        setTelemetryData(prev => {
+          const nodeId = data.dc_id
+          const existing = prev[nodeId] || []
+          const newPoint = {
+            timestamp: new Date(data.timestamp || Date.now()).toLocaleTimeString(),
+            power_kw: data.power_kw || 0,
+            soc: data.soc || 0,
+            freq: data.freq || 50.0
+          }
+          // Keep last 50 points per node
+          return {
+            ...prev,
+            [nodeId]: [...existing.slice(-49), newPoint]
+          }
+        })
+      }
+    })
+    
+    return () => {
+      clearInterval(interval)
+      unsubscribeTelemetry()
+    }
   }, [makeApiCall])
 
   const fetchNodes = async () => {
@@ -253,12 +285,41 @@ export default function Nodes() {
         </div>
 
         <div className="card">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Node Telemetry Stream</h2>
-          <div className="text-center py-12 text-gray-400">
-            <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>Real-time telemetry data will appear here</p>
-            <p className="text-sm mt-1">Connected via MQTT / WebSocket</p>
-          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Real-Time Telemetry Stream</h2>
+          {nodes.length > 0 ? (
+            <div className="space-y-6">
+              {nodes.slice(0, 3).map((node) => {
+                const nodeTelemetry = telemetryData[node.id] || []
+                const chartData = nodeTelemetry.length > 0 ? nodeTelemetry : [
+                  { timestamp: 'No data', power_kw: 0, soc: 0, freq: 50.0 }
+                ]
+                
+                return (
+                  <div key={node.id} className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">{node.name} - Power & SOC</h3>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="timestamp" />
+                        <YAxis yAxisId="left" label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }} />
+                        <YAxis yAxisId="right" orientation="right" label={{ value: 'SOC (%)', angle: 90, position: 'insideRight' }} />
+                        <Tooltip />
+                        <Legend />
+                        <Area yAxisId="left" type="monotone" dataKey="power_kw" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} name="Power (kW)" />
+                        <Area yAxisId="right" type="monotone" dataKey="soc" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="SOC (%)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-400">
+              <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Waiting for telemetry data...</p>
+              <p className="text-sm mt-1">Connected via MQTT / WebSocket</p>
+            </div>
+          )}
         </div>
       </>
     )}

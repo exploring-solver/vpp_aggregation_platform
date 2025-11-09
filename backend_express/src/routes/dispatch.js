@@ -53,12 +53,16 @@ router.post('/', async (req, res) => {
     );
     
     // Publish to Redis for real-time updates
-    await publishMessage('dispatch:commands', {
+    const dispatchData = {
       targets: nodeIds,
       action,
       params,
       timestamp
-    });
+    };
+    await publishMessage('dispatch:commands', dispatchData);
+    // Trigger callbacks directly (Redis pub/sub disabled)
+    const { triggerChannelCallbacks } = await import('../services/redis.js');
+    triggerChannelCallbacks('dispatch:commands', dispatchData);
     
     const successCount = results.filter(r => r.status === 'fulfilled').length;
     const failureCount = results.filter(r => r.status === 'rejected').length;
