@@ -46,6 +46,33 @@ export function generateToken(user) {
   });
 }
 
+// Optional authentication middleware - doesn't fail if no token, but sets req.user if valid token provided
+export function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // No token provided - continue without authentication
+    req.user = null;
+    req.auth = null;
+    return next();
+  }
+
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.auth = decoded;
+    req.user = decoded; // For compatibility
+    next();
+  } catch (error) {
+    // Token invalid or expired - continue without authentication
+    logger.warn(`Optional auth token verification failed: ${error.message}`);
+    req.user = null;
+    req.auth = null;
+    next();
+  }
+}
+
 // Check role middleware
 export function checkRole(allowedRoles) {
   return (req, res, next) => {
