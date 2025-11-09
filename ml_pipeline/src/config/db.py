@@ -1,8 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 import redis.asyncio as aioredis
-from src.config.config import config
-from src.utils.logger import logger
+from config.config import config
+from utils.logger import logger
 
 class DatabaseManager:
     def __init__(self):

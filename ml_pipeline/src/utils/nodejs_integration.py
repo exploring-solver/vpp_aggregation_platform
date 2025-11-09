@@ -4,10 +4,10 @@ Run this as a scheduled job (e.g., every 15 minutes)
 """
 import asyncio
 from datetime import datetime
-from src.orchestrator.hybrid_orchestrator import hybrid_orchestrator
-from src.utils.nodejs_integration import nodejs_client
-from src.config.db import db_manager
-from src.utils.logger import logger
+from orchestrator.hybrid_orchestrator import hybrid_orchestrator
+from utils.nodejs_integration import nodejs_client
+from config.db import db_manager
+from utils.logger import logger
 
 async def run_complete_integration_cycle():
     """

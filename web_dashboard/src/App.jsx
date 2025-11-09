@@ -10,6 +10,10 @@ import DGridOperator from './pages/DGridOperator'
 import DataCenterOperator from './pages/DataCenterOperator'
 import AgentManagement from './pages/AgentManagement'
 import Trading from './pages/Trading'
+import MLTraining from './pages/MLTraining'
+import MLOptimization from './pages/MLOptimization'
+import MLInsights from './pages/MLInsights'
+import MLControl from './pages/MLControl'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -49,6 +53,10 @@ function App() {
           <Route path="trading" element={<Trading />} />
           <Route path="dgrid-operator" element={<DGridOperator />} />
           <Route path="data-center-operator" element={<DataCenterOperator />} />
+        <Route path="ml-training" element={<MLTraining />} />
+        <Route path="ml-optimization" element={<MLOptimization />} />
+        <Route path="ml-insights" element={<MLInsights />} />
+        <Route path="ml-control" element={<MLControl />} />
         </Route>
       </Routes>
     </ErrorBoundary>

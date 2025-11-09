@@ -7,8 +7,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from typing import Dict, Tuple, Optional
 import json
 from pathlib import Path
-from src.utils.logger import logger
-from src.config.config import config
+from utils.logger import logger
+from config.config import config
 
 class GridBiddingEnv(gym.Env):
     """Custom Gymnasium environment for grid bidding optimization"""

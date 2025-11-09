@@ -1,11 +1,11 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
-from src.training.train_lstm import train_lstm_model
-from src.training.train_rl import train_rl_model
-from src.registry.drift_monitor import drift_monitor
-from src.utils.logger import logger
-from src.config.config import config
+from training.train_lstm import train_lstm_model
+from training.train_rl import train_rl_model
+from registry.drift_monitor import drift_monitor
+from utils.logger import logger
+from config.config import config
 
 class TrainingScheduler:
     """Automated training scheduler"""

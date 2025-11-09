@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
-from src.agents.intelligent_agent import intelligent_agent
-from src.controllers.workload_orchestrator import workload_orchestrator
-from src.config.db import db_manager
-from src.utils.logger import logger
+from agents.intelligent_agent import intelligent_agent
+from controllers.workload_orchestrator import workload_orchestrator
+from config.db import db_manager
+from utils.logger import logger
 
 router = APIRouter(prefix="/insights", tags=["Insights & Analytics"])
 

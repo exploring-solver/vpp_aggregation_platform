@@ -2,14 +2,14 @@ import asyncio
 import numpy as np
 from sklearn.model_selection import train_test_split
 from datetime import datetime
-from src.models.lstm_forecaster import LSTMForecaster
-from src.data.data_pipeline import data_pipeline
-from src.data.preprocessor import preprocessor
-from src.config.db import db_manager
-from src.utils.logger import logger
-from src.registry.model_registry import model_registry
+from models.lstm_forecaster import LSTMForecaster
+from data.data_pipeline import data_pipeline
+from data.preprocessor import preprocessor
+from config.db import db_manager
+from utils.logger import logger
+from registry.model_registry import model_registry
 import mlflow
-from src.config.config import config
+from config.config import config
 
 async def train_lstm_model(
     node_id: str,

@@ -3,10 +3,10 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import numpy as np
 from datetime import datetime
-from src.models.lstm_forecaster import LSTMForecaster
-from src.data.data_pipeline import data_pipeline
-from src.data.preprocessor import preprocessor
-from src.utils.logger import logger
+from models.lstm_forecaster import LSTMForecaster
+from data.data_pipeline import data_pipeline
+from data.preprocessor import preprocessor
+from utils.logger import logger
 
 router = APIRouter(prefix="/forecast", tags=["Forecasting"])
 

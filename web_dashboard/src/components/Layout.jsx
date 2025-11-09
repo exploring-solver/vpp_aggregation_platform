@@ -1,6 +1,10 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
+<<<<<<< HEAD
 import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, Brain, DollarSign } from 'lucide-react'
+=======
+import { LayoutDashboard, Server, Send, TrendingUp, LogOut, Grid3x3, Database, Zap, Settings, Brain, Target, Lightbulb, Power } from 'lucide-react'
+>>>>>>> cf8f979090b30cb18517cbfd3e0023f60b51c04c
 
 export default function Layout() {
   const { user, logout } = useAuth0()
@@ -14,6 +18,10 @@ export default function Layout() {
     { name: 'Trading', to: '/trading', icon: DollarSign },
     { name: 'DGrid Operator', to: '/dgrid-operator', icon: Grid3x3 },
     { name: 'Data Center Operator', to: '/data-center-operator', icon: Database },
+    { name: 'ML Training', to: '/ml-training', icon: Brain },
+    { name: 'ML Optimization', to: '/ml-optimization', icon: Target },
+    { name: 'ML Insights', to: '/ml-insights', icon: Lightbulb },
+    { name: 'ML Control', to: '/ml-control', icon: Power },
   ]
 
   return (

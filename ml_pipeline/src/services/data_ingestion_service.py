@@ -6,9 +6,9 @@ import asyncio
 from datetime import datetime
 from typing import Dict, List
 import aiohttp
-from src.config.config import config
-from src.config.db import db_manager
-from src.utils.logger import logger
+from config.config import config
+from config.db import db_manager
+from utils.logger import logger
 
 class DataIngestionService:
     """Handle data ingestion from Node.js backend"""

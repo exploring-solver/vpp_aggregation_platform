@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from loguru import logger
-from src.config.config import config
+from config.config import config
 
 # Remove default handler
 logger.remove()

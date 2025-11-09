@@ -5,16 +5,27 @@ from contextlib import asynccontextmanager
 import time
 import asyncio
 from datetime import datetime
-from ml_pipeline.src.controllers import workload_orchestrator
-from src.api.routes import forecast, optimization, training, control, insights, webhook
-from src.services.data_ingestion_service import data_ingestion_service
-from src.config.db import db_manager
-from src.config.config import config
-from src.utils.logger import logger
-from src.training.scheduler import training_scheduler
-from src.orchestrator.hybrid_orchestrator import hybrid_orchestrator
-from src.models.foundation_forecaster import foundation_forecaster
-from src.controllers.power_flow_controller import power_controller
+import sys
+from pathlib import Path
+
+# Add the src directory to the Python path
+src_dir = Path(__file__).resolve().parent.parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
+# Import from src level packages
+from controllers import workload_orchestrator
+from services.data_ingestion_service import data_ingestion_service
+from config import db
+from config.config import config
+from utils.logger import logger
+from training.scheduler import training_scheduler
+from orchestrator.hybrid_orchestrator import hybrid_orchestrator
+from models.foundation_forecaster import foundation_forecaster
+from controllers.power_flow_controller import power_controller
+
+# Import routes from the api.routes package (relative to current api folder)
+from api.routes import forecast, optimization, training, control, insights, webhook
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,8 +38,8 @@ async def lifespan(app: FastAPI):
     try:
         # Connect to databases
         logger.info("📊 Connecting to databases...")
-        await db_manager.connect_mongodb()
-        await db_manager.connect_redis()
+        await db.db_manager.connect_mongodb()
+        await db.db_manager.connect_redis()
         logger.info("✅ Database connections established")
         
         # Initialize foundation forecaster
@@ -100,7 +111,7 @@ async def lifespan(app: FastAPI):
         
         # Close database connections
         logger.info("🔌 Closing database connections...")
-        await db_manager.close()
+        await db.db_manager.close()
         logger.info("✅ Database connections closed")
         
         logger.info("=" * 80)
@@ -279,7 +290,7 @@ async def health_check():
     
     # Check MongoDB
     try:
-        await db_manager.mongo_db.command('ping')
+        await db.db_manager.mongo_db.command('ping')
         health_status["services"]["mongodb"] = {
             "status": "connected",
             "host": config.MONGO_URI.split('@')[-1] if '@' in config.MONGO_URI else "localhost"
@@ -293,8 +304,8 @@ async def health_check():
     
     # Check Redis
     try:
-        if db_manager.redis_client:
-            await db_manager.redis_client.ping()
+        if db.db_manager.redis_client:
+            await db.db_manager.redis_client.ping()
             health_status["services"]["redis"] = {
                 "status": "connected",
                 "url": config.REDIS_URL
@@ -432,7 +443,7 @@ async def system_info():
         },
         "configuration": {
             "ml_service_port": config.ML_SERVICE_PORT,
-            "mongodb_connected": db_manager.mongo_db is not None,
+            "mongodb_connected": db.db_manager.mongo_db is not None,
             "redis_configured": config.REDIS_URL is not None,
             "nodejs_backend": config.NODEJS_BACKEND_URL
         }
@@ -543,7 +554,7 @@ if __name__ == "__main__":
     logger.info("🚀 Starting server...")
     
     uvicorn.run(
-        "src.api.main:app",
+        "api.main:app",
         host=config.ML_SERVICE_HOST,
         port=config.ML_SERVICE_PORT,
         reload=True,

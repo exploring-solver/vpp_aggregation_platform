@@ -66,6 +66,9 @@ backend_express/IMPLEMENTATION_REQUIREMENTS.md
 telemetry_10nodes_30days.csv
 backend_express/SSH_MODULE.md
 backend_express/SSH_IMPLEMENTATION_SUMMARY.md
+
+
+venv310/
 AUTH0_SETUP.md
 COMPLETE_README.md
 FIXES_SUMMARY.md

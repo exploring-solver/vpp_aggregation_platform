@@ -3,8 +3,8 @@ Intelligent strategy agent using LLM for high-level decisions
 """
 from typing import Dict, List, Optional
 from datetime import datetime
-from src.utils.logger import logger
-from src.config.config import config
+from utils.logger import logger
+from config.config import config
 import json
 
 # Make OpenAI optional

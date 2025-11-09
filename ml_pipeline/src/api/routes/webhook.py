@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
 from datetime import datetime
-from src.services.data_ingestion_service import data_ingestion_service
-from src.utils.logger import logger
+from services.data_ingestion_service import data_ingestion_service
+from utils.logger import logger
 
 router = APIRouter(prefix="/webhook", tags=["Webhooks"])
 

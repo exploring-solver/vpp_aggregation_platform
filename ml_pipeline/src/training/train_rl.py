@@ -1,12 +1,12 @@
 import asyncio
 from datetime import datetime
-from src.models.rl_optimizer import RLOptimizer
-from src.data.data_pipeline import data_pipeline
-from src.config.db import db_manager
-from src.utils.logger import logger
-from src.registry.model_registry import model_registry
+from models.rl_optimizer import RLOptimizer
+from data.data_pipeline import data_pipeline
+from config.db import db_manager
+from utils.logger import logger
+from registry.model_registry import model_registry
 import mlflow
-from src.config.config import config
+from config.config import config
 
 async def train_rl_model(
     algorithm: str = "PPO",

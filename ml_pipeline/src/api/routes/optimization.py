@@ -3,8 +3,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 import numpy as np
 from datetime import datetime
-from src.models.rl_optimizer import RLOptimizer
-from src.utils.logger import logger
+from models.rl_optimizer import RLOptimizer
+from utils.logger import logger
 
 router = APIRouter(prefix="/optimization", tags=["Optimization"])
 
