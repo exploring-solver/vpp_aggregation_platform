@@ -13,7 +13,7 @@ export default function SSHTerminal({ dcId }) {
   const { makeApiCall } = useAuthToken()
 
   useEffect(() => {
-    setOutput('$ ')
+    setOutput('')
     testConnection()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dcId])
@@ -85,7 +85,7 @@ export default function SSHTerminal({ dcId }) {
     setHistoryIndex(-1)
     
     // Display command in output
-    setOutput(prev => prev + `$ ${cmd}\n`)
+    setOutput(prev => prev + `${cmd}\n`)
 
     try {
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ssh/${dcId}/command`
@@ -93,7 +93,7 @@ export default function SSHTerminal({ dcId }) {
         method: 'POST',
         body: JSON.stringify({
           command: cmd,
-          cwd: '~',
+          // Don't set cwd - backend will expand ~ to home directory automatically
           pty: true
         })
       })

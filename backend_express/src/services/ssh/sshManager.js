@@ -138,17 +138,32 @@ export class SSHManager {
     try {
       const ssh = await this.getConnection(dcId);
       
+      // Resolve working directory - expand ~ to actual home directory
+      let cwd = options.cwd;
+      if (cwd === '~' || cwd === undefined || cwd === null) {
+        // Get home directory by running echo $HOME
+        try {
+          const homeResult = await ssh.execCommand('echo $HOME', { cwd: '/' });
+          cwd = homeResult.stdout.trim() || '/home/ubuntu';
+        } catch {
+          cwd = '/home/ubuntu'; // Fallback
+        }
+      }
+      
+      // Build exec options - node-ssh expects cwd at top level
       const execOptions = {
-        cwd: options.cwd || '~',
-        execOptions: {
-          pty: options.pty !== false, // Enable PTY by default
-        },
+        cwd: cwd,
         ...options
       };
+      
+      // Add PTY option if not explicitly disabled
+      if (options.pty !== false) {
+        execOptions.execOptions = { pty: true };
+      }
 
       const result = await ssh.execCommand(command, execOptions);
       
-      logger.debug(`SSH command executed on ${dcId}: ${command}`);
+      logger.debug(`SSH command executed on ${dcId}: ${command} (cwd: ${cwd})`);
       
       return {
         success: result.code === 0,
@@ -215,7 +230,8 @@ export class SSHManager {
       
       for (const [key, command] of Object.entries(commands)) {
         try {
-          const result = await this.executeCommand(dcId, command);
+          // Use root directory to avoid cwd issues
+          const result = await this.executeCommand(dcId, command, { cwd: '/' });
           results[key] = {
             success: result.success,
             output: result.stdout || result.stderr
@@ -261,7 +277,8 @@ export class SSHManager {
       
       for (const [key, command] of Object.entries(commands)) {
         try {
-          const result = await this.executeCommand(dcId, command, { timeout: 5000 });
+          // Use root directory to avoid cwd issues
+          const result = await this.executeCommand(dcId, command, { cwd: '/', timeout: 5000 });
           results[key] = {
             success: result.success,
             output: result.stdout || result.stderr
