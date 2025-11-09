@@ -4,8 +4,8 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from typing import Tuple, Optional
 import pickle
 from pathlib import Path
-from src.utils.logger import logger
-from src.config.config import config
+from utils.logger import logger
+from config.config import config
 
 class DataPreprocessor:
     """Preprocess data for ML models"""

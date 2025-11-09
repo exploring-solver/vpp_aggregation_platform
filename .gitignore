@@ -63,9 +63,9 @@ backend_express/IMPLEMENTATION_SUMMARY.md
 backend_express/IMPLEMENTATION_REQUIREMENTS.md
 
 /data
-<<<<<<< HEAD
 telemetry_10nodes_30days.csv
-=======
 backend_express/SSH_MODULE.md
 backend_express/SSH_IMPLEMENTATION_SUMMARY.md
->>>>>>> 37be5c832224f253ba2744696a8ff70d482da3eb
+
+
+venv310/

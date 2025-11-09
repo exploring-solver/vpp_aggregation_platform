@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from src.config.db import db_manager
-from src.utils.logger import logger
+from config.db import db_manager
+from utils.logger import logger
 
 class DataPipeline:
     """Extract and prepare data from MongoDB for ML training"""

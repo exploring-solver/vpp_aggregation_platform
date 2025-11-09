@@ -7,8 +7,8 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from typing import Tuple, Dict, Optional
 import json
 from pathlib import Path
-from src.utils.logger import logger
-from src.config.config import config
+from utils.logger import logger
+from config.config import config
 
 class LSTMForecaster:
     """LSTM model for time-series forecasting of power output and grid metrics"""

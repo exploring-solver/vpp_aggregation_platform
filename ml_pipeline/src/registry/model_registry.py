@@ -1,9 +1,9 @@
 from typing import Dict, Optional, List
 from datetime import datetime
-from src.config.db import db_manager
-from src.utils.logger import logger
+from config.db import db_manager
+from utils.logger import logger
 import mlflow
-from src.config.config import config
+from config.config import config
 
 class ModelRegistry:
     """Model registry for tracking versions and metadata"""

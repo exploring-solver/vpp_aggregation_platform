@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-from src.training.train_lstm import train_lstm_model
-from src.training.train_rl import train_rl_model
-from src.registry.model_registry import model_registry
-from src.registry.drift_monitor import drift_monitor
-from src.utils.logger import logger
+from training.train_lstm import train_lstm_model
+from training.train_rl import train_rl_model
+from registry.model_registry import model_registry
+from registry.drift_monitor import drift_monitor
+from utils.logger import logger
 
 router = APIRouter(prefix="/training", tags=["Training"])
 

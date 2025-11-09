@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Literal
 from datetime import datetime
-from src.orchestrator.hybrid_orchestrator import hybrid_orchestrator
-from src.controllers.power_flow_controller import power_controller
-from src.controllers.workload_orchestrator import workload_orchestrator
-from src.utils.logger import logger
+from orchestrator.hybrid_orchestrator import hybrid_orchestrator
+from controllers.power_flow_controller import power_controller
+from controllers.workload_orchestrator import workload_orchestrator
+from utils.logger import logger
 
 router = APIRouter(prefix="/control", tags=["Intelligent Control"])
 

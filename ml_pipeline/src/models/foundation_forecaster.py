@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta
-from src.utils.logger import logger
+from utils.logger import logger
 import os
 import contextlib
-from src.config.config import config
+from config.config import config
 import asyncio
 import warnings
 warnings.filterwarnings('ignore')
@@ -36,6 +36,7 @@ class FoundationForecaster:
         self.prophet_available = PROPHET_AVAILABLE
         self.trained_models = {}  # node_id -> trained Prophet model
         self.model_stats = {}     # node_id -> statistics
+        self.pipeline = None
         
         if PROPHET_AVAILABLE:
             logger.info("🔮 Using Prophet for forecasting")

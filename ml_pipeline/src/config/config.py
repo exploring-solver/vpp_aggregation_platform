@@ -5,12 +5,17 @@ from pathlib import Path
 load_dotenv()
 
 class Config:
+    
+    DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD", 0.1))
+    
+    RETRAIN_INTERVAL_HOURS = int(os.getenv("RETRAIN_INTERVAL_HOURS", 16))
+    
     # ============================================================================
     # DATABASE CONFIGURATION
     # ============================================================================
     MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "vpp_platform")
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    REDIS_URL = os.getenv("REDIS_URL")
     
     # ============================================================================
     # ML SERVICE CONFIGURATION (THIS SERVICE)
