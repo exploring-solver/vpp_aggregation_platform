@@ -17,14 +17,12 @@ export async function connectRedis() {
     await redisClient.connect();
 
     // Subscriber client (separate connection for pub/sub)
+    // Note: Redis pub/sub subscriptions disabled due to node-redis v4 compatibility
     subscriberClient = redisClient.duplicate();
     subscriberClient.on('error', (err) => logger.error('Redis Subscriber Error:', err));
     await subscriberClient.connect();
     
-    // Set up message handler immediately after connection
-    setupMessageHandler();
-    
-    logger.info('Redis connections established');
+    logger.info('Redis connections established (pub/sub disabled, using direct callbacks)');
     
     return redisClient;
   } catch (error) {
@@ -79,64 +77,29 @@ export async function publishMessage(channel, message) {
   logger.debug(`Published to ${channel}:`, message);
 }
 
-// Simple pub/sub implementation - store callbacks per channel
+// Pub/Sub subscription - DISABLED due to node-redis v4 compatibility issues
+// Using direct callback triggering instead of Redis pub/sub
 const channelCallbacks = new Map();
-let messageHandlerRegistered = false;
-
-// Single global message handler - register once
-function setupMessageHandler() {
-  if (messageHandlerRegistered) return;
-  
-  const subscriber = getSubscriberClient();
-  
-  // Register ONE message handler that routes to appropriate callbacks
-  subscriber.on('message', (message, channelName) => {
-    const callbacks = channelCallbacks.get(channelName) || [];
-    if (callbacks.length === 0) return;
-    
-    let data;
-    try {
-      data = typeof message === 'string' ? JSON.parse(message) : message;
-    } catch (e) {
-      data = message;
-    }
-    
-    callbacks.forEach(cb => {
-      if (typeof cb === 'function') {
-        try {
-          cb(data);
-        } catch (error) {
-          logger.error(`Error in callback for channel ${channelName}:`, error);
-        }
-      }
-    });
-  });
-  
-  messageHandlerRegistered = true;
-  logger.info('Redis message handler registered');
-}
 
 export async function subscribeChannel(channel, callback) {
-  if (typeof callback !== 'function') {
-    throw new Error('Callback must be a function');
-  }
-  
-  const subscriber = getSubscriberClient();
-  
-  // Ensure message handler is set up (should already be done during connection)
-  setupMessageHandler();
-  
-  // Store callback first
+  // Store callback for manual triggering (no Redis subscription)
   if (!channelCallbacks.has(channel)) {
     channelCallbacks.set(channel, []);
   }
   channelCallbacks.get(channel).push(callback);
-  
-  // Subscribe to channel only if this is the first callback
-  if (channelCallbacks.get(channel).length === 1) {
-    await subscriber.subscribe(channel);
-    logger.info(`Subscribed to Redis channel: ${channel}`);
-  } else {
-    logger.debug(`Added additional callback to existing subscription: ${channel}`);
-  }
+  logger.debug(`Registered callback for channel: ${channel} (Redis pub/sub disabled)`);
+}
+
+// Manual trigger function to call callbacks (used instead of Redis pub/sub)
+export function triggerChannelCallbacks(channel, data) {
+  const callbacks = channelCallbacks.get(channel) || [];
+  callbacks.forEach(cb => {
+    if (typeof cb === 'function') {
+      try {
+        cb(data);
+      } catch (error) {
+        logger.error(`Error in callback for channel ${channel}:`, error);
+      }
+    }
+  });
 }

@@ -150,6 +150,9 @@ export class DataAggregator {
       
       // Publish update
       await publishMessage('vpp:state:update', vppState);
+      // Trigger callbacks directly (Redis pub/sub disabled)
+      const { triggerChannelCallbacks } = await import('../redis.js');
+      triggerChannelCallbacks('vpp:state:update', vppState);
       
       logger.debug(`Virtual Plant State computed: ${vppState.online_nodes}/${vppState.node_count} nodes, ${vppState.total_power_kw.toFixed(2)} kW`);
       

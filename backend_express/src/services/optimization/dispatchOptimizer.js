@@ -288,13 +288,17 @@ export class DispatchOptimizer {
       }
 
       // Publish update
-      await publishMessage('dispatch:optimized', {
+      const dispatchData = {
         plan_id: plan.optimization_id,
         action: plan.action,
         commands_count: plan.commands.length,
         success_count: results.filter(r => r.status === 'success').length,
         timestamp: timestamp
-      });
+      };
+      await publishMessage('dispatch:optimized', dispatchData);
+      // Trigger callbacks directly (Redis pub/sub disabled)
+      const { triggerChannelCallbacks } = await import('../redis.js');
+      triggerChannelCallbacks('dispatch:optimized', dispatchData);
 
       return {
         executed: results.length,
