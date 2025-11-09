@@ -14,7 +14,6 @@ sys.path.insert(0, str(src_dir))
 
 # Now run the main application
 if __name__ == "__main__":
-    from api import main as app
     import uvicorn
     from config.config import config
     from utils.logger import logger
@@ -24,7 +23,7 @@ if __name__ == "__main__":
     logger.info(f"📂 Source Directory: {src_dir}")
     
     uvicorn.run(
-        app,
+        "api.main:app",
         host=config.ML_SERVICE_HOST,
         port=config.ML_SERVICE_PORT,
         reload=True,
