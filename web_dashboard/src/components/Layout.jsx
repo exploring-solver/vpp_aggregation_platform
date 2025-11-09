@@ -10,14 +10,9 @@ export default function Layout() {
     { name: 'Nodes', to: '/nodes', icon: Server },
     { name: 'Dispatch', to: '/dispatch', icon: Send },
     { name: 'Forecasts', to: '/forecasts', icon: TrendingUp },
-    { name: 'AI Agents', to: '/agents', icon: Brain },
-    { name: 'Trading', to: '/trading', icon: DollarSign },
     { name: 'DGrid Operator', to: '/dgrid-operator', icon: Grid3x3 },
     { name: 'Data Center Operator', to: '/data-center-operator', icon: Database },
-    { name: 'ML Training', to: '/ml-training', icon: Brain },
-    { name: 'ML Optimization', to: '/ml-optimization', icon: Target },
-    { name: 'ML Insights', to: '/ml-insights', icon: Lightbulb },
-    { name: 'ML Control', to: '/ml-control', icon: Power },
+    { name: 'SSH Connections', to: '/ssh-connections', icon: Zap },
   ]
 
   return (
@@ -32,7 +27,7 @@ export default function Layout() {
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">VPP Platform</h1>
+                <h1 className="text-xl font-bold text-white">Vusio</h1>
                 <p className="text-xs text-primary-100">Grid Flexibility Aggregation</p>
               </div>
             </div>
