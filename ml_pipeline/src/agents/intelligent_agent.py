@@ -243,15 +243,53 @@ Provide 3 actionable suggestions as JSON array of strings.
                     temperature=0.7,
                     max_tokens=300
                 )
-                
-                result = json.loads(response.choices[0].message.content)
-                return result.get('suggestions', [])
+                # Robust parsing: the Groq client may return the content as a string,
+                # or as an already-parsed Python list/dict. Handle all cases.
+                raw = response.choices[0].message.content
+                try:
+                    if isinstance(raw, (list, dict)):
+                        parsed = raw
+                    elif isinstance(raw, str):
+                        try:
+                            parsed = json.loads(raw)
+                        except Exception:
+                            # Attempt to extract the first JSON array/object from noisy text
+                            import re
+                            m = re.search(r"(\[.*\]|\{.*\})", raw, flags=re.DOTALL)
+                            if m:
+                                try:
+                                    parsed = json.loads(m.group(1))
+                                except Exception:
+                                    parsed = raw
+                            else:
+                                parsed = raw
+                    else:
+                        parsed = str(raw)
+
+                    # Now normalize and return suggestions
+                    if isinstance(parsed, list):
+                        return [str(x) for x in parsed]
+                    if isinstance(parsed, dict):
+                        for key in ('suggestions', 'suggestion', 'results', 'items'):
+                            val = parsed.get(key)
+                            if isinstance(val, list):
+                                return [str(x) for x in val]
+                        vals = [v for v in parsed.values() if isinstance(v, str)]
+                        if vals:
+                            return vals
+                    if isinstance(parsed, str):
+                        lines = [l.strip() for l in parsed.splitlines() if l.strip()]
+                        if lines:
+                            return lines[:3]
+
+                    logger.warning("Unexpected suggestions format from LLM; falling back to rule-based suggestions. Raw response (truncated): %s", str(raw)[:1000])
+                    return self._fallback_suggestions()
+                except Exception as ex:
+                    logger.error("Failed to parse LLM suggestions response: %s", ex)
+                    return self._fallback_suggestions()
             except Exception as e:
                 logger.error(f"Error generating suggestions: {e}")
                 return self._fallback_suggestions()
-        else:
-            return self._fallback_suggestions()
-    
     def _fallback_suggestions(self) -> List[str]:
         """Default suggestions when LLM unavailable"""
         return [
