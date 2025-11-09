@@ -23,12 +23,12 @@ class IntelligentStrategyAgent:
     def __init__(self):
         self.client = None
         self.llm_enabled = False
-        self.model = "mixtral-8x7b-32768"  # Groq's Mixtral model
+        self.model = "openai/gpt-oss-20b"  # Groq's Mixtral model
         
         # Try to initialize Groq
-        if GROQ_AVAILABLE and config.GROQ_API_KEY:
+        if GROQ_AVAILABLE and config.OPENAI_API_KEY:
             try:
-                self.client = AsyncGroq(api_key=config.GROQ_API_KEY)
+                self.client = AsyncGroq(api_key=config.OPENAI_API_KEY)
                 self.llm_enabled = True
                 logger.info("✅ LLM agent enabled (Groq)")
             except Exception as e:
