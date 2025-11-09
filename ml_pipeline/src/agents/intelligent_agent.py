@@ -245,7 +245,24 @@ Provide 3 actionable suggestions as JSON array of strings.
                 )
                 
                 result = json.loads(response.choices[0].message.content)
-                return result.get('suggestions', [])
+                # Groq may return either a JSON array (['s1','s2']) or an object
+                # {"suggestions": [...]} — handle both cases gracefully.
+                parsed = result
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+                if isinstance(parsed, dict):
+                    # common keys that might contain suggestions
+                    for key in ('suggestions', 'suggestion', 'results', 'items'):
+                        val = parsed.get(key)
+                        if isinstance(val, list):
+                            return [str(x) for x in val]
+                    # If dict itself maps to strings, try to extract string values
+                    vals = [v for v in parsed.values() if isinstance(v, str)]
+                    if vals:
+                        return vals
+
+                logger.warning("Unexpected suggestions format from LLM; falling back to rule-based suggestions")
+                return self._fallback_suggestions()
             except Exception as e:
                 logger.error(f"Error generating suggestions: {e}")
                 return self._fallback_suggestions()
