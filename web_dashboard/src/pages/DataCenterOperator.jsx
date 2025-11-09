@@ -9,75 +9,252 @@ import { useAuthToken } from '../services/auth'
 export default function DataCenterOperator() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [nodeId] = useState('DC01') // TODO: Get from user context or URL params
   const { makeApiCall } = useAuthToken()
+  const [forecastData, setForecastData] = useState(null)
+  const [historicalData, setHistoricalData] = useState(null)
+  const [dispatchLogs, setDispatchLogs] = useState([])
 
   useEffect(() => {
-    fetchNodeData()
-    const interval = setInterval(fetchNodeData, 10000)
+    fetchAllData()
+    const interval = setInterval(fetchAllData, 10000)
     return () => clearInterval(interval)
-  }, [nodeId, makeApiCall])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId])
+
+  const fetchAllData = async () => {
+    try {
+      setError(null)
+      await Promise.all([
+        fetchNodeData(),
+        fetchForecastData(),
+        fetchHistoricalTelemetry(),
+        fetchDispatchLogs()
+      ])
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      setError(error.message || 'Failed to fetch data')
+    }
+  }
 
   const fetchNodeData = async () => {
     try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      
       // Fetch node details
-      const nodeUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/nodes/${nodeId}`
+      const nodeUrl = `${baseUrl}/api/nodes/${nodeId}`
       const nodeResponse = await makeApiCall(nodeUrl)
       
-      if (nodeResponse.ok) {
-        const nodeResult = await nodeResponse.json()
-        const node = nodeResult.data
-        const lastState = node.last_state || {}
-        
-        // Fetch aggregate for revenue calculations
-        const aggUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/aggregate`
-        const aggResponse = await makeApiCall(aggUrl)
-        let revenueData = { revenue_today: 0, co2_saved: 0 }
-        if (aggResponse.ok) {
-          const aggResult = await aggResponse.json()
-          const agg = aggResult.data
-          // Calculate per-node share (simplified)
-          const nodeShare = node.online ? (1 / (agg.online_nodes || 1)) : 0
-          revenueData = {
-            revenue_today: Math.round(agg.revenue_today * nodeShare),
-            co2_saved: parseFloat((agg.co2_saved * nodeShare).toFixed(1))
-          }
-        }
-        
-        setData({
-          currentLoadMW: (lastState.power_kw || 0) / 1000,
-          soc: lastState.soc || 0,
-          powerImportExport: (lastState.power_kw || 0) / 1000, // Simplified
-          gridFrequency: lastState.freq || 50.0,
-          demandResponseMode: 'Auto',
-          currentDayEarnings: revenueData.revenue_today,
-          monthlyRevenue: revenueData.revenue_today * 30, // Estimate
-          revenueByService: {
-            sras: Math.round(revenueData.revenue_today * 0.3),
-            tras: Math.round(revenueData.revenue_today * 0.4),
-            arbitrage: Math.round(revenueData.revenue_today * 0.2),
-            dr: Math.round(revenueData.revenue_today * 0.1)
-          },
-          bessUtilizationRate: lastState.soc || 0,
-          loadDeferralPercent: 12.5, // TODO: Calculate from actual data
-          efficiencyFactor: 0.92, // TODO: Calculate from actual data
-          batteryDegradationIndex: 0.95, // TODO: Calculate from actual data
-          predictedGridEvents: [], // TODO: Fetch from forecast API
-          walletBalance: 125000, // TODO: Fetch from blockchain API
-          energyCredits: 450 // TODO: Fetch from blockchain API
-        })
+      if (!nodeResponse.ok) {
+        throw new Error(`Failed to fetch node: ${nodeResponse.status}`)
       }
+      
+      const nodeResult = await nodeResponse.json()
+      const node = nodeResult.data
+      const lastState = node.last_state || {}
+      
+      // Fetch aggregate for revenue calculations
+      const aggUrl = `${baseUrl}/api/aggregate`
+      const aggResponse = await makeApiCall(aggUrl)
+      let revenueData = { revenue_today: 0, co2_saved: 0 }
+      if (aggResponse.ok) {
+        const aggResult = await aggResponse.json()
+        const agg = aggResult.data
+        // Calculate per-node share based on capacity
+        const nodeCapacity = node.capacity_kw || 150
+        const totalCapacity = agg.total_capacity_kw || nodeCapacity
+        const nodeShare = node.online && totalCapacity > 0 ? (nodeCapacity / totalCapacity) : 0
+        revenueData = {
+          revenue_today: Math.round(agg.revenue_today * nodeShare),
+          co2_saved: parseFloat((agg.co2_saved * nodeShare).toFixed(1))
+        }
+      }
+      
+      // Calculate metrics from historical data if available
+      const bessUtilization = calculateBESSUtilization(lastState, node)
+      const efficiency = calculateEfficiency(lastState)
+      const degradation = calculateBatteryDegradation(lastState, node)
+      
+      setData({
+        currentLoadMW: (lastState.power_kw || 0) / 1000,
+        soc: lastState.soc || 0,
+        powerImportExport: (lastState.power_kw || 0) / 1000,
+        gridFrequency: lastState.freq || 50.0,
+        demandResponseMode: 'Auto', // TODO: Get from node config or dispatch logs
+        currentDayEarnings: revenueData.revenue_today,
+        monthlyRevenue: revenueData.revenue_today * 30, // Estimate
+        revenueByService: {
+          sras: Math.round(revenueData.revenue_today * 0.3),
+          tras: Math.round(revenueData.revenue_today * 0.4),
+          arbitrage: Math.round(revenueData.revenue_today * 0.2),
+          dr: Math.round(revenueData.revenue_today * 0.1)
+        },
+        bessUtilizationRate: bessUtilization,
+        loadDeferralPercent: calculateLoadDeferral(lastState, node),
+        efficiencyFactor: efficiency,
+        batteryDegradationIndex: degradation,
+        nodeCapacity: node.capacity_kw || 150,
+        nodeBattery: node.battery_kwh || 200,
+        online: node.online || false,
+        lastUpdate: lastState.timestamp || new Date().toISOString()
+      })
     } catch (error) {
       console.error('Error fetching node data:', error)
+      setError(error.message || 'Failed to fetch node data')
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) {
+  const fetchForecastData = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      
+      // Fetch load forecast
+      const loadForecastUrl = `${baseUrl}/api/forecast/load?horizon_hours=24`
+      const loadResponse = await makeApiCall(loadForecastUrl)
+      
+      // Fetch grid stress forecast
+      const stressForecastUrl = `${baseUrl}/api/forecast/grid-stress?horizon_hours=24`
+      const stressResponse = await makeApiCall(stressForecastUrl)
+      
+      let loadForecast = null
+      let stressForecast = null
+      
+      if (loadResponse.ok) {
+        const loadResult = await loadResponse.json()
+        loadForecast = loadResult.data
+      }
+      
+      if (stressResponse.ok) {
+        const stressResult = await stressResponse.json()
+        stressForecast = stressResult.data
+        
+        // Convert grid stress predictions to grid events
+        const predictedEvents = stressForecast.predictions
+          .filter(p => p.value > 0.6) // Only show high stress events
+          .slice(0, 5) // Limit to 5 events
+          .map(p => ({
+            time: new Date(p.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            type: p.value > 0.8 ? 'High Stress' : 'Moderate Stress',
+            stressScore: p.value
+          }))
+        
+        setForecastData({
+          loadForecast,
+          stressForecast,
+          predictedGridEvents: predictedEvents
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching forecast data:', error)
+    }
+  }
+
+  const fetchHistoricalTelemetry = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      
+      // Get last 24 hours of data
+      const endTime = new Date()
+      const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000)
+      
+      const telemetryUrl = `${baseUrl}/api/telemetry/range?dc_id=${nodeId}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`
+      const response = await makeApiCall(telemetryUrl)
+      
+      if (response.ok) {
+        const result = await response.json()
+        setHistoricalData(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching historical telemetry:', error)
+    }
+  }
+
+  const fetchDispatchLogs = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      
+      const dispatchUrl = `${baseUrl}/api/dispatch/logs?dc_id=${nodeId}&limit=10`
+      const response = await makeApiCall(dispatchUrl)
+      
+      if (response.ok) {
+        const result = await response.json()
+        setDispatchLogs(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching dispatch logs:', error)
+    }
+  }
+
+  // Calculate BESS utilization rate
+  const calculateBESSUtilization = (lastState, node) => {
+    if (!lastState || !lastState.soc) return 0
+    // Utilization is based on how much of the battery capacity is being used
+    const batteryCapacity = node.battery_kwh || 200
+    const currentEnergy = (batteryCapacity * lastState.soc) / 100
+    return (currentEnergy / batteryCapacity) * 100
+  }
+
+  // Calculate efficiency factor (simplified)
+  const calculateEfficiency = (lastState) => {
+    // Base efficiency, could be improved with actual charge/discharge data
+    return 0.92 // Default efficiency for Li-ion batteries
+  }
+
+  // Calculate battery degradation
+  const calculateBatteryDegradation = (lastState, node) => {
+    // Simplified degradation calculation
+    // In production, this would use cycle count, temperature, depth of discharge, etc.
+    if (!node.created_at) return 0.95
+    
+    const ageDays = (new Date() - new Date(node.created_at)) / (1000 * 60 * 60 * 24)
+    const degradationRate = 0.0001 // 0.01% per day (very simplified)
+    const degradation = 1 - (ageDays * degradationRate)
+    return Math.max(0.8, Math.min(1, degradation)) // Clamp between 0.8 and 1.0
+  }
+
+  // Calculate load deferral percentage
+  const calculateLoadDeferral = (lastState, node) => {
+    if (!lastState || !lastState.power_kw || !node.capacity_kw) return 0
+    // Load deferral is the percentage of load that can be deferred
+    const loadRatio = Math.abs(lastState.power_kw) / node.capacity_kw
+    return Math.min(100, loadRatio * 25) // Simplified calculation
+  }
+
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  if (error && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <p className="text-lg font-semibold text-gray-900">Error loading data</p>
+        <p className="text-sm text-gray-600 mt-2">{error}</p>
+        <button 
+          onClick={() => {
+            setError(null)
+            setLoading(true)
+            fetchAllData()
+          }} 
+          className="btn btn-primary mt-4"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-600">No data available</p>
       </div>
     )
   }
@@ -122,10 +299,17 @@ export default function DataCenterOperator() {
             <p className="text-2xl font-bold text-gray-900">{data?.gridFrequency?.toFixed(2) || 50.0} Hz</p>
           </div>
           <div className="card">
-            <p className="text-sm font-medium text-gray-600 mb-1">DR Mode</p>
+            <p className="text-sm font-medium text-gray-600 mb-1">Status</p>
             <div className="flex items-center mt-2">
-              <span className="badge badge-success">{data?.demandResponseMode || 'Auto'}</span>
+              <span className={`badge ${data?.online ? 'badge-success' : 'badge-error'}`}>
+                {data?.online ? 'Online' : 'Offline'}
+              </span>
             </div>
+            {data?.lastUpdate && (
+              <p className="text-xs text-gray-500 mt-1">
+                Updated: {new Date(data.lastUpdate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -206,20 +390,56 @@ export default function DataCenterOperator() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Next 24h Demand Curve</h3>
-            <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg">
-              Chart placeholder - implement with Recharts
-            </div>
+            {forecastData?.loadForecast?.predictions ? (
+              <div className="h-64 flex flex-col justify-end">
+                <div className="flex items-end justify-between h-full gap-1">
+                  {forecastData.loadForecast.predictions
+                    .filter((_, i) => i % 4 === 0) // Show every hour
+                    .slice(0, 24)
+                    .map((pred, idx) => {
+                      const maxValue = Math.max(...forecastData.loadForecast.predictions.map(p => p.value))
+                      const height = maxValue > 0 ? (pred.value / maxValue) * 100 : 0
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center">
+                          <div 
+                            className="w-full bg-primary-500 rounded-t transition-all"
+                            style={{ height: `${height}%` }}
+                            title={`${pred.value.toFixed(1)} kW at ${new Date(pred.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+                          />
+                          {idx % 6 === 0 && (
+                            <span className="text-xs text-gray-500 mt-1">
+                              {new Date(pred.time).toLocaleTimeString('en-US', { hour: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                </div>
+                <div className="mt-2 text-xs text-gray-500 text-center">
+                  Confidence: {(forecastData.loadForecast.confidence * 100).toFixed(0)}%
+                </div>
+              </div>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg">
+                {loading ? 'Loading forecast...' : 'No forecast data available'}
+              </div>
+            )}
           </div>
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Predicted Grid Events</h3>
             <div className="space-y-3">
-              {(data?.predictedGridEvents || []).length === 0 ? (
+              {(forecastData?.predictedGridEvents || []).length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No predicted grid events</p>
+                  {forecastData?.stressForecast && (
+                    <p className="text-xs mt-2">
+                      Current stress: {(forecastData.stressForecast.current_stress_score * 100).toFixed(0)}%
+                    </p>
+                  )}
                 </div>
               ) : (
-                data.predictedGridEvents.map((event, idx) => (
+                forecastData.predictedGridEvents.map((event, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center">
                     <Clock className="w-4 h-4 text-gray-500 mr-2" />
@@ -230,19 +450,28 @@ export default function DataCenterOperator() {
                   </div>
                   <div className="flex items-center">
                     <span className={`badge ${event.stressScore > 0.7 ? 'badge-error' : 'badge-warning'} mr-2`}>
-                      Stress: {event.stressScore}
+                      Stress: {(event.stressScore * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
                 ))
               )}
             </div>
-            <div className="mt-4 p-3 bg-primary-50 rounded-lg">
-              <p className="text-sm text-primary-900">
-                <strong>Recommended Scheduling:</strong> Prepare for peak demand at 14:00. 
-                Charge BESS to 90% by 13:30 for optimal participation.
-              </p>
-            </div>
+            {forecastData?.stressForecast && (
+              <div className="mt-4 p-3 bg-primary-50 rounded-lg">
+                <p className="text-sm text-primary-900">
+                  <strong>Current Grid Stress:</strong> {(forecastData.stressForecast.current_stress_score * 100).toFixed(0)}%
+                  {forecastData.stressForecast.current_stress_score > 0.6 && (
+                    <span className="ml-2 text-orange-600">⚠️ High stress detected</span>
+                  )}
+                </p>
+                {forecastData.predictedGridEvents && forecastData.predictedGridEvents.length > 0 && (
+                  <p className="text-xs text-primary-700 mt-1">
+                    Prepare for peak demand. Charge BESS to 90% before high stress periods.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -335,26 +564,44 @@ export default function DataCenterOperator() {
             <p className="text-sm text-gray-500">Total credits earned</p>
           </div>
           <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Smart Contract History</h3>
-            {(data?.smartContractHistory || []).length === 0 ? (
+            <h3 className="text-lg font-semibold mb-4">Recent Dispatch Commands</h3>
+            {dispatchLogs.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No contract history</p>
+                <p className="text-sm">No dispatch history</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {data.smartContractHistory.map((contract, idx) => (
+                {dispatchLogs.slice(0, 5).map((log, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <div className="flex items-center">
-                      <CheckCircle2 className="w-4 h-4 text-green-600 mr-2" />
-                      <span className="text-sm">Settlement #{contract.id || idx}</span>
+                      {log.status === 'active' || log.status === 'completed' ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600 mr-2" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      <div>
+                        <span className="text-sm font-medium">{log.action}</span>
+                        {log.params?.power_kw && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            {log.params.power_kw > 0 ? '+' : ''}{log.params.power_kw} kW
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-xs text-gray-500">{contract.time || 'N/A'}</span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(log.timestamp).toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-            <button className="btn btn-secondary mt-4 w-full">View All</button>
+            <button className="btn btn-secondary mt-4 w-full">View All Logs</button>
           </div>
         </div>
       </div>

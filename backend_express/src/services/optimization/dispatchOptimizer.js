@@ -271,6 +271,7 @@ export class DispatchOptimizer {
             action: cmd.action,
             params: cmd.params,
             issued_by: 'system',
+            operator_email: 'amansharma12607@gmail.com', // Placeholder for data center operator
             timestamp: timestamp,
             status: 'sent',
             optimization_id: plan.optimization_id,

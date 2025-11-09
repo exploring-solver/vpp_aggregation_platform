@@ -8,8 +8,11 @@ import Dispatch from './pages/Dispatch'
 import Forecasts from './pages/Forecasts'
 import DGridOperator from './pages/DGridOperator'
 import DataCenterOperator from './pages/DataCenterOperator'
+import AgentManagement from './pages/AgentManagement'
+import Trading from './pages/Trading'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
   const { isLoading } = useAuth0()
@@ -26,25 +29,29 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="nodes" element={<Nodes />} />
-        <Route path="nodes/:dcId" element={<NodeDetail />} />
-        <Route path="dispatch" element={<Dispatch />} />
-        <Route path="forecasts" element={<Forecasts />} />
-        <Route path="dgrid-operator" element={<DGridOperator />} />
-        <Route path="data-center-operator" element={<DataCenterOperator />} />
-      </Route>
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="nodes" element={<Nodes />} />
+          <Route path="nodes/:dcId" element={<NodeDetail />} />
+          <Route path="dispatch" element={<Dispatch />} />
+          <Route path="forecasts" element={<Forecasts />} />
+          <Route path="agents" element={<AgentManagement />} />
+          <Route path="trading" element={<Trading />} />
+          <Route path="dgrid-operator" element={<DGridOperator />} />
+          <Route path="data-center-operator" element={<DataCenterOperator />} />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
   )
 }
 

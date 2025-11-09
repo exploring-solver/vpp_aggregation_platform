@@ -40,6 +40,7 @@ router.post('/', async (req, res) => {
       action,
       params,
       issued_by: 'system',
+      operator_email: 'amansharma12607@gmail.com', // Placeholder for data center operator
       timestamp,
       status: 'sent',
       result: {}

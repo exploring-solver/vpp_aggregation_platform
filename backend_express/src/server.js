@@ -18,6 +18,8 @@ import optimizationRoutes from './routes/optimization.js';
 import marketRoutes from './routes/market.js';
 import agentRoutes from './routes/agents.js';
 import sshRoutes from './routes/ssh.js';
+import vendorAuthRoutes from './routes/vendorAuth.js';
+import marketplaceRoutes from './routes/marketplace.js';
 
 // Import services
 import { connectDB } from './services/database.js';
@@ -60,6 +62,7 @@ app.get('/health', (req, res) => {
 
 // Public routes
 app.use('/api/auth', authRoutes);
+app.use('/api/vendor-auth', vendorAuthRoutes); // Vendor authentication (JWT-based)
 
 // Public routes - telemetry (no auth required)
 app.use('/api/telemetry', telemetryRoutes);
@@ -75,6 +78,7 @@ app.use('/api/optimization', optimizationRoutes); // Auth handled in route with 
 app.use('/api/market', marketRoutes); // Auth handled in route with checkRole
 app.use('/api/agents', agentRoutes); // Multi-agent system routes
 app.use('/api/ssh', sshRoutes); // SSH access to edge machines
+app.use('/api/marketplace', marketplaceRoutes); // Marketplace routes (bids, transactions, trading)
 
 // Error handling middleware
 app.use((err, req, res, next) => {

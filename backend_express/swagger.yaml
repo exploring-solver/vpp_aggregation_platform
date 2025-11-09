@@ -1,0 +1,2157 @@
+openapi: 3.0.3
+info:
+  title: VPP Aggregation Platform API
+  description: |
+    API documentation for the Virtual Power Plant (VPP) Aggregation Platform.
+    This platform manages edge nodes, telemetry data, dispatch commands, market trading, and multi-agent coordination.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: amansharma12607@gmail.com
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+  - url: https://api.vpp-platform.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User and vendor authentication endpoints
+  - name: Telemetry
+    description: Telemetry data ingestion and retrieval
+  - name: Nodes
+    description: Edge node management
+  - name: Dispatch
+    description: Command dispatch to edge nodes
+  - name: Aggregation
+    description: Virtual plant state aggregation
+  - name: Forecast
+    description: Load and grid stress forecasting
+  - name: Optimization
+    description: RL-based optimization and dispatch planning
+  - name: Market
+    description: Market bidding and bid management
+  - name: Agents
+    description: Multi-agent system coordination
+  - name: SSH
+    description: SSH access to edge machines
+  - name: Marketplace
+    description: Marketplace for bids, transactions, and trading
+  - name: Vendor Auth
+    description: Vendor authentication and registration
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login or /api/vendor-auth/login
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        token:
+          type: string
+        user:
+          type: object
+          properties:
+            email:
+              type: string
+            name:
+              type: string
+            role:
+              type: string
+              enum: [admin, operator, viewer]
+
+    User:
+      type: object
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    VendorRegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - companyName
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        phone:
+          type: string
+
+    Vendor:
+      type: object
+      properties:
+        email:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+
+    TelemetryData:
+      type: object
+      required:
+        - dc_id
+      properties:
+        dc_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        power_kw:
+          type: number
+        voltage_v:
+          type: number
+        frequency_hz:
+          type: number
+        battery_soc:
+          type: number
+        temperature_c:
+          type: number
+        load_factor:
+          type: number
+
+    Node:
+      type: object
+      required:
+        - dc_id
+      properties:
+        dc_id:
+          type: string
+        name:
+          type: string
+        region:
+          type: string
+        capacity_kw:
+          type: number
+        battery_capacity_kwh:
+          type: number
+        location:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_state:
+          type: object
+        online:
+          type: boolean
+
+    DispatchRequest:
+      type: object
+      required:
+        - targets
+        - action
+      properties:
+        targets:
+          oneOf:
+            - type: string
+              enum: [all]
+            - type: array
+              items:
+                type: string
+            - type: string
+        action:
+          type: string
+          enum: [charge, discharge, defer_load, hold]
+        params:
+          type: object
+
+    DispatchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        dispatched:
+          type: integer
+        succeeded:
+          type: integer
+        failed:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    DispatchLog:
+      type: object
+      properties:
+        dc_id:
+          type: string
+        action:
+          type: string
+        params:
+          type: object
+        issued_by:
+          type: string
+        operator_email:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+        result:
+          type: object
+
+    AggregateData:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        node_count:
+          type: integer
+        total_capacity_kw:
+          type: number
+        total_battery_kwh:
+          type: number
+        total_power_kw:
+          type: number
+        avg_soc:
+          type: number
+        avg_freq:
+          type: number
+        online_nodes:
+          type: integer
+        freq_status:
+          type: string
+        available_reserve_mw:
+          type: number
+        committed_reserve_mw:
+          type: number
+        location_flexibility:
+          type: object
+        nodes:
+          type: array
+          items:
+            type: object
+        revenue_today:
+          type: number
+        co2_saved:
+          type: number
+
+    Forecast:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        horizon_hours:
+          type: integer
+        forecast_data:
+          type: array
+          items:
+            type: object
+
+    OptimizationRecommendation:
+      type: object
+      properties:
+        action:
+          type: string
+        expected_reward:
+          type: number
+        confidence:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    DispatchPlan:
+      type: object
+      properties:
+        plan:
+          type: object
+        expected_revenue:
+          type: number
+        confidence:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    MarketBid:
+      type: object
+      required:
+        - service_type
+        - capacity_mw
+        - price_per_mw
+      properties:
+        service_type:
+          type: string
+        capacity_mw:
+          type: number
+        price_per_mw:
+          type: number
+        duration_minutes:
+          type: integer
+        market_type:
+          type: string
+          enum: [intraday, day_ahead, real_time]
+
+    Bid:
+      type: object
+      properties:
+        bid_id:
+          type: string
+        service_type:
+          type: string
+        capacity_mw:
+          type: number
+        price_per_mw:
+          type: number
+        duration_minutes:
+          type: integer
+        market_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, rejected, cancelled, completed]
+        vendor_id:
+          type: string
+        vendor_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AgentStatus:
+      type: object
+      properties:
+        agents:
+          type: object
+          properties:
+            optimization:
+              type: object
+            forecast:
+              type: object
+            monitoring:
+              type: object
+        last_execution:
+          type: string
+          format: date-time
+        status:
+          type: string
+
+    SSHConfig:
+      type: object
+      required:
+        - ssh_config
+      properties:
+        ssh_config:
+          type: object
+          required:
+            - host
+            - username
+          properties:
+            host:
+              type: string
+            port:
+              type: integer
+              default: 22
+            username:
+              type: string
+            password:
+              type: string
+            private_key:
+              type: string
+            passphrase:
+              type: string
+            usePrivateKey:
+              type: boolean
+
+    SSHCommandRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+        cwd:
+          type: string
+        pty:
+          type: boolean
+
+    SSHCommandsRequest:
+      type: object
+      required:
+        - commands
+      properties:
+        commands:
+          type: array
+          items:
+            type: string
+        cwd:
+          type: string
+        stopOnError:
+          type: boolean
+
+    SSHFileRequest:
+      type: object
+      required:
+        - localPath
+        - remotePath
+      properties:
+        localPath:
+          type: string
+        remotePath:
+          type: string
+
+    Transaction:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+        bid_id:
+          type: string
+        vendor_id:
+          type: string
+        capacity_mw:
+          type: number
+        price_per_mw:
+          type: number
+        duration_minutes:
+          type: integer
+        market_type:
+          type: string
+        total_amount:
+          type: number
+        status:
+          type: string
+          enum: [pending, active, completed, cancelled]
+        placed_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    TradingStrategy:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        rl_strategy:
+          type: object
+        recommended_bids:
+          type: array
+          items:
+            type: object
+        expected_revenue:
+          type: number
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns the health status of the API
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and receive JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user info
+      description: Returns information about the current authenticated user
+      security: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+
+  /auth/user:
+    post:
+      tags:
+        - Authentication
+      summary: Create or update user
+      description: Create a new user or update existing user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, operator, viewer]
+                  default: viewer
+      responses:
+        '201':
+          description: User created/updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+
+  /vendor-auth/register:
+    post:
+      tags:
+        - Vendor Auth
+      summary: Register new vendor
+      description: Register a new vendor account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorRegisterRequest'
+      responses:
+        '201':
+          description: Vendor registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  vendor:
+                    $ref: '#/components/schemas/Vendor'
+        '409':
+          description: Vendor already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vendor-auth/login:
+    post:
+      tags:
+        - Vendor Auth
+      summary: Vendor login
+      description: Authenticate vendor and receive JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  vendor:
+                    $ref: '#/components/schemas/Vendor'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /vendor-auth/me:
+    get:
+      tags:
+        - Vendor Auth
+      summary: Get current vendor info
+      description: Returns information about the current authenticated vendor
+      responses:
+        '200':
+          description: Vendor information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  vendor:
+                    $ref: '#/components/schemas/Vendor'
+
+  /telemetry:
+    post:
+      tags:
+        - Telemetry
+      summary: Submit telemetry data
+      description: Receive telemetry data from edge nodes
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryData'
+      responses:
+        '201':
+          description: Telemetry data processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - Telemetry
+      summary: Get latest telemetry
+      description: Retrieve latest telemetry data
+      security: []
+      parameters:
+        - name: dc_id
+          in: query
+          schema:
+            type: string
+          description: Filter by data center ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: Maximum number of records to return
+      responses:
+        '200':
+          description: Telemetry data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TelemetryData'
+
+  /telemetry/range:
+    get:
+      tags:
+        - Telemetry
+      summary: Get telemetry in time range
+      description: Retrieve telemetry data within a specific time range
+      security: []
+      parameters:
+        - name: dc_id
+          in: query
+          schema:
+            type: string
+          description: Filter by data center ID
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start timestamp
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End timestamp
+      responses:
+        '200':
+          description: Telemetry data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TelemetryData'
+        '400':
+          description: Missing required parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /nodes:
+    get:
+      tags:
+        - Nodes
+      summary: List all nodes
+      description: Get a list of all registered edge nodes
+      security: []
+      responses:
+        '200':
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Node'
+
+    post:
+      tags:
+        - Nodes
+      summary: Register new node
+      description: Register a new edge node
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Node'
+      responses:
+        '201':
+          description: Node registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Node'
+        '409':
+          description: Node already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /nodes/{dc_id}:
+    get:
+      tags:
+        - Nodes
+      summary: Get specific node
+      description: Get details of a specific node by dc_id
+      security: []
+      parameters:
+        - name: dc_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: Node details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Node'
+        '404':
+          description: Node not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Nodes
+      summary: Update node
+      description: Update node information
+      security: []
+      parameters:
+        - name: dc_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                region:
+                  type: string
+                capacity_kw:
+                  type: number
+                battery_capacity_kwh:
+                  type: number
+                location:
+                  type: object
+      responses:
+        '200':
+          description: Node updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Node not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Nodes
+      summary: Delete node
+      description: Delete a node from the system
+      security: []
+      parameters:
+        - name: dc_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: Node deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Node not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /dispatch:
+    post:
+      tags:
+        - Dispatch
+      summary: Dispatch command to edge nodes
+      description: Send dispatch commands to one or more edge nodes
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchRequest'
+      responses:
+        '200':
+          description: Command dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /dispatch/logs:
+    get:
+      tags:
+        - Dispatch
+      summary: Get dispatch history
+      description: Retrieve dispatch command history
+      security: []
+      parameters:
+        - name: dc_id
+          in: query
+          schema:
+            type: string
+          description: Filter by data center ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of records
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+      responses:
+        '200':
+          description: Dispatch logs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DispatchLog'
+
+  /aggregate:
+    get:
+      tags:
+        - Aggregation
+      summary: Get aggregated virtual plant statistics
+      description: Get aggregated statistics for the virtual power plant
+      security: []
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+          description: Filter by region
+        - name: nodeIds
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of node IDs
+      responses:
+        '200':
+          description: Aggregated data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  cached:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/AggregateData'
+
+  /aggregate/vpp-state:
+    get:
+      tags:
+        - Aggregation
+      summary: Get full Virtual Plant State
+      description: Get enhanced virtual plant state with detailed node information
+      security: []
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+          description: Filter by region
+        - name: nodeIds
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of node IDs
+      responses:
+        '200':
+          description: VPP state retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/AggregateData'
+
+  /forecast/load:
+    get:
+      tags:
+        - Forecast
+      summary: Get load forecast
+      description: Generate load forecast for the virtual power plant
+      security: []
+      parameters:
+        - name: horizon_hours
+          in: query
+          schema:
+            type: integer
+          description: Forecast horizon in hours
+      responses:
+        '200':
+          description: Load forecast generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Forecast'
+
+  /forecast/grid-stress:
+    get:
+      tags:
+        - Forecast
+      summary: Get grid stress forecast
+      description: Generate grid stress forecast
+      security: []
+      parameters:
+        - name: horizon_hours
+          in: query
+          schema:
+            type: integer
+          description: Forecast horizon in hours
+      responses:
+        '200':
+          description: Grid stress forecast generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Forecast'
+
+  /optimization/recommendation:
+    get:
+      tags:
+        - Optimization
+      summary: Get RL optimization recommendation
+      description: Get optimal action recommendation from RL optimizer
+      security: []
+      responses:
+        '200':
+          description: Optimization recommendation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/OptimizationRecommendation'
+
+  /optimization/dispatch:
+    post:
+      tags:
+        - Optimization
+      summary: Optimize and execute dispatch
+      description: Generate optimized dispatch plan and optionally execute it
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auto_execute:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Dispatch optimized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/DispatchPlan'
+
+  /optimization/dispatch/plan:
+    get:
+      tags:
+        - Optimization
+      summary: Get dispatch plan without executing
+      description: Get optimized dispatch plan without executing it
+      security: []
+      responses:
+        '200':
+          description: Dispatch plan retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/DispatchPlan'
+
+  /market/bids:
+    post:
+      tags:
+        - Market
+      summary: Prepare and submit market bid
+      description: Create a new market bid
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketBid'
+      responses:
+        '200':
+          description: Bid created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - Market
+      summary: Get active bids
+      description: Retrieve all active market bids
+      security: []
+      responses:
+        '200':
+          description: Active bids retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /market/bids/{bidId}:
+    get:
+      tags:
+        - Market
+      summary: Get bid status
+      description: Get status of a specific bid
+      security: []
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Bid ID
+      responses:
+        '200':
+          description: Bid status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '404':
+          description: Bid not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /agents/status:
+    get:
+      tags:
+        - Agents
+      summary: Get agent system status
+      description: Get status of the multi-agent system
+      security: []
+      responses:
+        '200':
+          description: Agent status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/AgentStatus'
+
+  /agents/execute:
+    post:
+      tags:
+        - Agents
+      summary: Execute agent coordination cycle
+      description: Execute a coordination cycle for all agents
+      security: []
+      responses:
+        '200':
+          description: Agent cycle executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /agents/recommendations:
+    get:
+      tags:
+        - Agents
+      summary: Get agent recommendations
+      description: Get recommendations from all agents
+      security: []
+      responses:
+        '200':
+          description: Agent recommendations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      recommendedAction:
+                        type: string
+                      expectedRevenue:
+                        type: number
+                      confidence:
+                        type: number
+                      loadForecast:
+                        type: object
+                      gridStress:
+                        type: object
+                      systemHealth:
+                        type: string
+                      availableReserve:
+                        type: number
+
+  /ssh/{dcId}/test:
+    post:
+      tags:
+        - SSH
+      summary: Test SSH connection
+      description: Test SSH connection to an edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/command:
+    post:
+      tags:
+        - SSH
+      summary: Execute command on edge machine
+      description: Execute a single command via SSH
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SSHCommandRequest'
+      responses:
+        '200':
+          description: Command executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/commands:
+    post:
+      tags:
+        - SSH
+      summary: Execute multiple commands
+      description: Execute multiple commands sequentially
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SSHCommandsRequest'
+      responses:
+        '200':
+          description: Commands executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /ssh/{dcId}/system-info:
+    get:
+      tags:
+        - SSH
+      summary: Get system information
+      description: Get system information from edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: System info retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/edge-info:
+    get:
+      tags:
+        - SSH
+      summary: Get edge node specific information
+      description: Get edge node specific information
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: Edge info retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/files:
+    get:
+      tags:
+        - SSH
+      summary: List files in directory
+      description: List files in a directory on the edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+        - name: path
+          in: query
+          schema:
+            type: string
+          description: Directory path
+      responses:
+        '200':
+          description: Files listed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /ssh/{dcId}/upload:
+    post:
+      tags:
+        - SSH
+      summary: Upload file to edge machine
+      description: Upload a file to the edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SSHFileRequest'
+      responses:
+        '200':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/download:
+    post:
+      tags:
+        - SSH
+      summary: Download file from edge machine
+      description: Download a file from the edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - remotePath
+                - localPath
+              properties:
+                remotePath:
+                  type: string
+                localPath:
+                  type: string
+      responses:
+        '200':
+          description: File downloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /ssh/{dcId}/close:
+    post:
+      tags:
+        - SSH
+      summary: Close SSH connection
+      description: Close SSH connection to edge node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: Connection closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /ssh/{dcId}/config:
+    get:
+      tags:
+        - SSH
+      summary: Get SSH configuration
+      description: Get SSH configuration for a node (without sensitive data)
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      responses:
+        '200':
+          description: SSH config retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+    put:
+      tags:
+        - SSH
+      summary: Update SSH configuration
+      description: Update SSH configuration for a node
+      security: []
+      parameters:
+        - name: dcId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Data center ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SSHConfig'
+      responses:
+        '200':
+          description: SSH config updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+
+  /marketplace/bids:
+    get:
+      tags:
+        - Marketplace
+      summary: Get all bids
+      description: Get all marketplace bids with optional filtering
+      security: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+        - name: market_type
+          in: query
+          schema:
+            type: string
+          description: Filter by market type
+        - name: placed_by
+          in: query
+          schema:
+            type: string
+          description: Filter by user who placed bid
+        - name: vendor_id
+          in: query
+          schema:
+            type: string
+          description: Filter by vendor ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of records
+      responses:
+        '200':
+          description: Bids retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bid'
+
+    post:
+      tags:
+        - Marketplace
+      summary: Create new bid
+      description: Create a new marketplace bid (vendor auth required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketBid'
+      responses:
+        '201':
+          description: Bid created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Bid'
+        '403':
+          description: Only vendors can create bids
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /marketplace/bids/{bidId}:
+    put:
+      tags:
+        - Marketplace
+      summary: Update bid
+      description: Update a marketplace bid (vendor auth required, own bids only)
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Bid ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capacity_mw:
+                  type: number
+                price_per_mw:
+                  type: number
+                duration_minutes:
+                  type: integer
+                status:
+                  type: string
+                  enum: [pending, accepted, rejected, cancelled]
+      responses:
+        '200':
+          description: Bid updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Bid'
+        '403':
+          description: Not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Marketplace
+      summary: Delete bid
+      description: Delete a marketplace bid (vendor auth required, own bids only)
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Bid ID
+      responses:
+        '200':
+          description: Bid deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '403':
+          description: Not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /marketplace/transactions:
+    get:
+      tags:
+        - Marketplace
+      summary: Get all transactions
+      description: Get all marketplace transactions with optional filtering
+      security: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+        - name: vendor_id
+          in: query
+          schema:
+            type: string
+          description: Filter by vendor ID
+        - name: placed_by
+          in: query
+          schema:
+            type: string
+          description: Filter by user who placed transaction
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of records
+      responses:
+        '200':
+          description: Transactions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+
+    post:
+      tags:
+        - Marketplace
+      summary: Create transaction
+      description: Create a new transaction (when bid is accepted)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - bid_id
+                - capacity_mw
+                - price_per_mw
+              properties:
+                bid_id:
+                  type: string
+                vendor_id:
+                  type: string
+                capacity_mw:
+                  type: number
+                price_per_mw:
+                  type: number
+                duration_minutes:
+                  type: integer
+                market_type:
+                  type: string
+      responses:
+        '201':
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Transaction'
+
+  /marketplace/transactions/{transactionId}:
+    put:
+      tags:
+        - Marketplace
+      summary: Update transaction status
+      description: Update the status of a transaction
+      security: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Transaction ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [pending, active, completed, cancelled]
+      responses:
+        '200':
+          description: Transaction updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Transaction'
+
+  /marketplace/vendors:
+    get:
+      tags:
+        - Marketplace
+      summary: Get all vendors
+      description: Get list of all active vendors
+      security: []
+      responses:
+        '200':
+          description: Vendors retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vendor'
+
+  /marketplace/trading-strategy:
+    get:
+      tags:
+        - Marketplace
+      summary: Get RL trading strategy
+      description: Get latest RL trading strategy (read-only)
+      security: []
+      responses:
+        '200':
+          description: Trading strategy retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/TradingStrategy'
+
+    post:
+      tags:
+        - Marketplace
+      summary: Execute RL trading strategy
+      description: Execute RL trading strategy and get recommendations
+      security: []
+      responses:
+        '200':
+          description: Trading strategy executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/TradingStrategy'
+
+  /marketplace/trading-history:
+    get:
+      tags:
+        - Marketplace
+      summary: Get trading history
+      description: Get trading history with optional filtering
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of records
+      responses:
+        '200':
+          description: Trading history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /marketplace/performance:
+    get:
+      tags:
+        - Marketplace
+      summary: Get RL agent performance metrics
+      description: Get performance metrics for the RL trading agent
+      security: []
+      responses:
+        '200':
+          description: Performance metrics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
