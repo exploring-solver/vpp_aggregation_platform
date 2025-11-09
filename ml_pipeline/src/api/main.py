@@ -171,13 +171,28 @@ app = FastAPI(
 )
 
 # CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# If CORS_ORIGINS contains "*", we need to handle it specially
+# FastAPI doesn't allow "*" with allow_credentials=True
+cors_origins = config.CORS_ORIGINS
+if cors_origins == ["*"]:
+    # Allow all origins but disable credentials
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Use specific origins with credentials
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Request timing middleware
 @app.middleware("http")

@@ -285,7 +285,7 @@ Provide 3 actionable suggestions as JSON array of strings.
                     logger.warning("Unexpected suggestions format from LLM; falling back to rule-based suggestions. Raw response (truncated): %s", str(raw)[:1000])
                     return self._fallback_suggestions()
                 except Exception as ex:
-                    logger.error("Failed to parse LLM suggestions response: %s", ex)
+                    # logger.error("Failed to parse LLM suggestions response: %s", ex)
                     return self._fallback_suggestions()
             except Exception as e:
                 logger.error(f"Error generating suggestions: {e}")
