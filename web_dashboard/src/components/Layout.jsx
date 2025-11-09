@@ -32,7 +32,7 @@ export default function Layout() {
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">VPP Platform</h1>
+                <h1 className="text-xl font-bold text-white">Vusio</h1>
                 <p className="text-xs text-primary-100">Grid Flexibility Aggregation</p>
               </div>
             </div>
