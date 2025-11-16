@@ -1,0 +1,153 @@
+# Layer 4: Market & Compliance Configuration
+
+# Market Participation Settings
+market_participation:
+  enabled: false  # Set to true when ready for production
+  participant_id: VPP_VUSIO
+  participant_name: "Vusio Virtual Power Plant"
+
+  # Energy Exchanges
+  exchanges:
+    - name: IEX
+      enabled: true
+      api_url: https://api.iexindia.com
+      api_key: ${IEX_API_KEY}
+      participant_code: ${IEX_PARTICIPANT_CODE}
+
+    - name: PXIL
+      enabled: false
+      api_url: https://api.pxil.co.in
+      api_key: ${PXIL_API_KEY}
+      participant_code: ${PXIL_PARTICIPANT_CODE}
+
+  # Market Segments
+  segments:
+    dam:  # Day-Ahead Market
+      enabled: true
+      bid_submission_deadline: "10:00"  # 10:00 AM
+      auto_bidding: true
+
+    rtm:  # Real-Time Market
+      enabled: true
+      auto_bidding: true
+
+    tam:  # Term-Ahead Market
+      enabled: false
+
+    gdam:  # Green Day-Ahead Market
+      enabled: false
+
+# Bidding Strategy
+bidding_strategy:
+  strategy: adaptive  # Options: aggressive, conservative, adaptive
+
+  # Bid parameters
+  price_margins:
+    sell_margin_rs: -0.20     # Bid 0.20 Rs below MCP for sell
+    buy_margin_rs: 0.20       # Bid 0.20 Rs above MCP for buy
+
+  # Volume allocation
+  max_bid_volume_mwh: 50      # Maximum bid size per block
+  min_bid_volume_mwh: 1       # Minimum bid size
+
+  # SOC-based constraints
+  soc_thresholds:
+    min_soc_for_sell: 30      # Don't sell if SOC < 30%
+    max_soc_for_buy: 80       # Don't buy if SOC > 80%
+
+  # Risk management
+  risk:
+    max_exposure_per_day_mwh: 200  # Maximum daily trading volume
+    diversify_across_blocks: true  # Spread bids across time blocks
+
+# Ancillary Services
+ancillary_services:
+  # SRAS (Standing Reserve Ancillary Services)
+  sras:
+    enabled: false
+    max_capacity_mw: 10
+    response_time_seconds: 5  # Must respond within 5 seconds
+    contract_type: monthly
+
+  # TRAS (Active Reserves Ancillary Services)
+  tras:
+    enabled: false
+    max_capacity_mw: 5
+    ramp_rate: high
+
+  # RRAS (Reactive Power Ancillary Services)
+  rras:
+    enabled: false
+    reactive_capacity_mvar: 5
+
+# Settlement & Accounting
+settlement:
+  auto_reconciliation: true
+  settlement_period: daily  # daily, weekly, monthly
+
+  # DSM (Deviation Settlement Mechanism)
+  dsm:
+    enabled: true
+    track_deviations: true
+    penalty_threshold: 5  # % deviation threshold
+
+# Compliance & Reporting
+compliance:
+  # CERC (Central Electricity Regulatory Commission)
+  cerc:
+    enabled: true
+    reporting_frequency: quarterly
+    report_path: /data/compliance/cerc/
+
+  # IEGC (Indian Electricity Grid Code)
+  iegc:
+    enabled: true
+    enforce_frequency_response: true
+    audit_logging: true
+    log_path: /data/compliance/iegc/
+
+  # Financial audits
+  financial:
+    enabled: true
+    audit_frequency: quarterly
+    audit_path: /data/compliance/financial/
+
+# Audit Logging
+audit:
+  enabled: true
+  log_all_bids: true
+  log_all_dispatches: true
+  log_all_settlements: true
+  retention_days: 365
+
+  # Log destinations
+  destinations:
+    - type: file
+      path: /var/log/vpp/audit.log
+    - type: database
+      connection: mongodb://mongodb:27017/vpp_audit
+    - type: syslog
+      host: syslog.vusio.io
+      port: 514
+
+# Revenue Optimization
+revenue_optimization:
+  enabled: true
+
+  # Optimization objectives
+  objectives:
+    - maximize_revenue
+    - minimize_degradation_cost
+    - maintain_grid_services
+
+  # Cost parameters
+  costs:
+    battery_degradation_rs_per_kwh: 0.50  # Battery wear cost
+    operation_cost_rs_per_kwh: 0.10       # Operational costs
+    demand_charge_rs_per_kw: 500          # Monthly demand charge
+
+  # Forecast integration
+  forecasting:
+    price_forecast_hours: 48
+    load_forecast_hours: 24
+    renewable_forecast_hours: 24
