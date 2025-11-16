@@ -1,0 +1,115 @@
+# Layer 2: Campus/Location Aggregation Configuration
+
+# Campus Definitions
+campuses:
+  - id: CAMPUS_MUMBAI_ANDHERI
+    name: "Mumbai Andheri Data Center Campus"
+    city_id: CITY_MUMBAI
+    state_id: STATE_MAHARASHTRA
+    country_id: COUNTRY_INDIA
+
+    # Geographic location
+    location:
+      latitude: 19.1136
+      longitude: 72.8697
+      altitude: 14  # meters
+      address: "Andheri East, Mumbai, Maharashtra 400069"
+      timezone: "Asia/Kolkata"
+
+    # Grid connection
+    grid:
+      connection_point: "Andheri 400kV Substation"
+      voltage_kv: 33
+      feeder_id: "FEED_AND_01"
+
+    # Buildings in this campus
+    buildings:
+      - id: BUILDING_DC01
+        name: "Data Center Building 1"
+        address: "Block A, Andheri Campus"
+        location:
+          latitude: 19.1138
+          longitude: 72.8695
+
+      - id: BUILDING_DC02
+        name: "Data Center Building 2"
+        address: "Block B, Andheri Campus"
+        location:
+          latitude: 19.1134
+          longitude: 72.8699
+
+    # Campus controller settings
+    controller:
+      poll_interval: 10  # seconds
+      dispatch_strategy: balanced  # proportional, balanced, priority
+      enable_local_optimization: true
+      enable_redundancy_management: true
+
+    # Operational parameters
+    operations:
+      operator: "Vusio VPP Operations"
+      contact_email: "operations@vusio.io"
+      emergency_contact: "+91-XXXXXXXXXX"
+
+  - id: CAMPUS_BANGALORE_WHITEFIELD
+    name: "Bangalore Whitefield Campus"
+    city_id: CITY_BANGALORE
+    state_id: STATE_KARNATAKA
+    country_id: COUNTRY_INDIA
+
+    location:
+      latitude: 12.9698
+      longitude: 77.7499
+      address: "Whitefield, Bangalore, Karnataka 560066"
+      timezone: "Asia/Kolkata"
+
+    grid:
+      connection_point: "Whitefield 220kV Substation"
+      voltage_kv: 33
+
+    buildings:
+      - id: BUILDING_BLR01
+        name: "Bangalore DC1"
+
+    controller:
+      poll_interval: 10
+      dispatch_strategy: proportional
+
+# Location Hierarchy
+hierarchy:
+  - country:
+      id: COUNTRY_INDIA
+      name: India
+      code: IN
+
+    states:
+      - id: STATE_MAHARASHTRA
+        name: Maharashtra
+        cities:
+          - id: CITY_MUMBAI
+            name: Mumbai
+            population: 20000000
+
+      - id: STATE_KARNATAKA
+        name: Karnataka
+        cities:
+          - id: CITY_BANGALORE
+            name: Bangalore
+            population: 12000000
+
+# Local Optimization Settings
+optimization:
+  objectives:
+    - minimize_transmission_losses
+    - balance_soc_across_nodes
+    - maximize_availability
+
+  constraints:
+    max_power_imbalance_kw: 50  # Max power difference between nodes
+    min_reserve_margin: 0.2      # 20% reserve for contingency
+
+# Layer 3 (Regional Aggregator) Connection
+layer3:
+  url: http://layer3_regional:8200
+  registration_endpoint: /api/campus/register
+  telemetry_endpoint: /api/campus/telemetry

@@ -1,0 +1,109 @@
+# Layer 3: Grid Integration & Regional Aggregation Configuration
+
+# Grid Integration Mode
+grid_integration:
+  mode: simulation  # Options: simulation, pmu, posoco, scada
+
+  # Frequency Measurement Source
+  frequency_source: simulated  # Options: simulated, pmu, posoco_wams
+
+  # PMU Configuration (if mode = pmu)
+  pmu:
+    enabled: false
+    host: 192.168.10.100
+    port: 4712  # IEEE C37.118 standard port
+    protocol: c37118  # IEEE C37.118
+    sampling_rate_hz: 10  # 10 Hz (100ms intervals)
+    zone: western  # northern, eastern, western, southern, north_eastern
+
+  # POSOCO WAMS Integration (if mode = posoco)
+  posoco:
+    enabled: false
+    wams_url: https://wams.posoco.in
+    api_key: ${POSOCO_API_KEY}
+    region: western  # Western Regional Load Dispatch Centre (WRLDC)
+
+  # SCADA Integration
+  scada:
+    enabled: false
+    protocol: iec60870  # IEC 60870-5-104
+    host: 192.168.10.200
+    port: 2404
+    common_address: 1
+
+# Frequency Response Settings (IEGC Compliant)
+frequency_response:
+  enabled: true
+
+  # Droop Control Parameters
+  droop:
+    droop_percent: 5.0         # 5% droop (IEGC standard)
+    deadband_low_hz: 49.90     # Lower deadband
+    deadband_high_hz: 50.05    # Upper deadband (IEGC: 49.90-50.05 Hz)
+
+  # Response Modes
+  modes:
+    primary: true              # Primary response (0-5 seconds)
+    secondary: false           # Secondary response (AGC-based, 30s-15min)
+    tertiary: false            # Tertiary response (market-based, 15min+)
+
+  # Power Allocation
+  power_allocation:
+    max_response_power_kw: 1000   # Maximum power for frequency response
+    ramp_rate_kw_per_s: 50        # Power ramping rate
+    enable_damping: true          # ROCOF damping
+    damping_gain: 0.1
+
+  # Adaptive Features
+  adaptive:
+    soc_dependent: true        # Adjust response based on SOC
+    temperature_dependent: true # Limit response at extreme temperatures
+
+# AGC (Automatic Generation Control) Settings
+agc:
+  enabled: false
+  sldc: western_rldc  # State/Regional Load Dispatch Centre
+  polling_interval: 4  # seconds (IEGC: 4-second AGC cycle)
+
+# Grid Code Compliance (IEGC)
+iegc_compliance:
+  enforce_deadband: true
+  enforce_response_time: true     # Must respond within 5 seconds
+  enforce_droop_accuracy: true    # ±5% of theoretical droop
+  log_violations: true
+
+  # Frequency Bands (IEGC)
+  frequency_bands:
+    critical_low: 49.50
+    low: 49.90
+    normal_low: 49.90
+    normal_high: 50.05
+    high: 50.05
+    critical_high: 50.50
+
+# Regional Aggregation
+regional_aggregation:
+  regions:
+    - id: REGION_WESTERN
+      name: "Western Region"
+      states:
+        - STATE_MAHARASHTRA
+        - STATE_GUJARAT
+        - STATE_MADHYA_PRADESH
+        - STATE_GOA
+      rldc: western_rldc
+
+    - id: REGION_SOUTHERN
+      name: "Southern Region"
+      states:
+        - STATE_KARNATAKA
+        - STATE_TAMIL_NADU
+        - STATE_KERALA
+        - STATE_ANDHRA_PRADESH
+      rldc: southern_rldc
+
+# Layer 4 (Market Gateway) Connection
+layer4:
+  url: http://layer4_market:8300
+  registration_endpoint: /api/vpp/register
+  market_signals_endpoint: /api/market/signals

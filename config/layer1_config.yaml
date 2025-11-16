@@ -1,0 +1,118 @@
+# Layer 1: Field Devices Configuration
+# BESS Hardware and Edge Nodes
+
+mode: simulation  # Options: 'simulation' or 'hardware'
+
+# BESS Units Configuration
+bess_units:
+  - id: BESS_DC01_01
+    name: "Mumbai Andheri DC01 BESS Unit 1"
+    campus_id: CAMPUS_MUMBAI_ANDHERI
+    building_id: BUILDING_DC01
+    type: bess
+
+    # Hardware connection (for hardware mode)
+    modbus:
+      host: 192.168.1.100
+      port: 502
+      unit_id: 1
+      timeout: 5
+
+    # BESS specifications
+    capacity:
+      rated_power_kw: 100
+      energy_capacity_kwh: 250
+      chemistry: lithium_ion  # lithium_ion, lfp, nmc
+
+    # BMS configuration
+    bms:
+      num_cells: 16
+      num_temp_sensors: 8
+      can_interface: can0  # For CAN bus BMS
+
+    # Inverter configuration
+    inverter:
+      manufacturer: SunSpec
+      model: SI-100K
+      rated_power_kw: 100
+      sunspec_base_address: 40000
+
+    # Safety limits
+    safety:
+      min_soc: 10.0
+      max_soc: 95.0
+      min_temperature: -10.0
+      max_temperature: 55.0
+      critical_temperature: 60.0
+      max_charge_current_a: 100.0
+      max_discharge_current_a: 100.0
+      max_power_ramp_rate_kw_per_s: 10.0
+
+    # API endpoint
+    endpoint:
+      host: 0.0.0.0
+      port: 8000
+
+  - id: BESS_DC01_02
+    name: "Mumbai Andheri DC01 BESS Unit 2"
+    campus_id: CAMPUS_MUMBAI_ANDHERI
+    building_id: BUILDING_DC01
+    type: bess
+
+    modbus:
+      host: 192.168.1.101
+      port: 502
+      unit_id: 1
+
+    capacity:
+      rated_power_kw: 100
+      energy_capacity_kwh: 250
+      chemistry: lithium_ion
+
+    bms:
+      num_cells: 16
+      num_temp_sensors: 8
+
+    inverter:
+      manufacturer: SunSpec
+      model: SI-100K
+      rated_power_kw: 100
+
+    safety:
+      min_soc: 10.0
+      max_soc: 95.0
+      min_temperature: -10.0
+      max_temperature: 55.0
+      critical_temperature: 60.0
+
+    endpoint:
+      host: 0.0.0.0
+      port: 8001
+
+# Edge Node Simulators (for simulation mode)
+edge_simulators:
+  - id: DC01
+    enabled: true
+    telemetry_interval: 5  # seconds
+    mqtt_enabled: true
+
+  - id: DC02
+    enabled: true
+    telemetry_interval: 5
+    mqtt_enabled: true
+
+# MQTT Configuration
+mqtt:
+  broker_url: mqtt://mqtt_broker:1883
+  topics:
+    telemetry: vpp/telemetry/{node_id}
+    commands: vpp/commands/{node_id}
+    status: vpp/status/{node_id}
+  qos: 1
+  retain: false
+
+# Aggregator connection
+aggregator:
+  url: http://aggregator_backend:3000
+  registration_endpoint: /api/nodes/register
+  telemetry_endpoint: /api/telemetry

@@ -1,0 +1,343 @@
+# Docker Compose - Full Layered VPP Architecture
+# All 4 layers + core services
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # INFRASTRUCTURE SERVICES
+  # ===========================================
+
+  mongodb:
+    image: mongo:7
+    container_name: vpp_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: vpp_platform
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - vpp_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vpp_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - vpp_network
+
+  mqtt_broker:
+    image: eclipse-mosquitto:2
+    container_name: vpp_mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/config:/mosquitto/config
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+    networks:
+      - vpp_network
+
+  # ===========================================
+  # LAYER 1: FIELD DEVICES
+  # ===========================================
+
+  # BESS Controller 1
+  bess_controller_1:
+    build:
+      context: ./layer1_field_devices/bess_controller
+      dockerfile: Dockerfile
+    container_name: vpp_bess_01
+    ports:
+      - "8001:8000"
+    environment:
+      BESS_ID: BESS_DC01_01
+      CAMPUS_ID: CAMPUS_MUMBAI_ANDHERI
+      MODE: simulation
+      MQTT_BROKER_URL: mqtt://mqtt_broker:1883
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      TELEMETRY_INTERVAL: 5
+      MODBUS_HOST: 192.168.1.100
+      MODBUS_PORT: 502
+    depends_on:
+      - mqtt_broker
+      - aggregator_backend
+    networks:
+      - vpp_network
+    volumes:
+      - ./config:/config:ro
+
+  # BESS Controller 2
+  bess_controller_2:
+    build:
+      context: ./layer1_field_devices/bess_controller
+      dockerfile: Dockerfile
+    container_name: vpp_bess_02
+    ports:
+      - "8002:8000"
+    environment:
+      BESS_ID: BESS_DC01_02
+      CAMPUS_ID: CAMPUS_MUMBAI_ANDHERI
+      MODE: simulation
+      MQTT_BROKER_URL: mqtt://mqtt_broker:1883
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      TELEMETRY_INTERVAL: 5
+    depends_on:
+      - mqtt_broker
+      - aggregator_backend
+    networks:
+      - vpp_network
+
+  # Edge Node Simulator (existing - for backwards compatibility)
+  edge_node_1:
+    build:
+      context: ./services/edge_node
+      dockerfile: Dockerfile
+    container_name: vpp_edge_node_1
+    ports:
+      - "8003:8000"
+    environment:
+      DC_ID: DC01
+      MQTT_ENABLED: "true"
+      MQTT_BROKER_URL: mqtt://mqtt_broker:1883
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      TELEMETRY_INTERVAL: 5
+    depends_on:
+      - mqtt_broker
+      - aggregator_backend
+    networks:
+      - vpp_network
+
+  edge_node_2:
+    build:
+      context: ./services/edge_node
+      dockerfile: Dockerfile
+    container_name: vpp_edge_node_2
+    ports:
+      - "8004:8000"
+    environment:
+      DC_ID: DC02
+      MQTT_ENABLED: "true"
+      MQTT_BROKER_URL: mqtt://mqtt_broker:1883
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      TELEMETRY_INTERVAL: 5
+    depends_on:
+      - mqtt_broker
+      - aggregator_backend
+    networks:
+      - vpp_network
+
+  # ===========================================
+  # LAYER 2: CAMPUS AGGREGATION
+  # ===========================================
+
+  campus_mumbai:
+    build:
+      context: ./layer2_campus_aggregation/campus_controller
+      dockerfile: Dockerfile
+    container_name: vpp_campus_mumbai
+    ports:
+      - "8100:8100"
+    environment:
+      CAMPUS_ID: CAMPUS_MUMBAI_ANDHERI
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      LAYER3_URL: http://layer3_regional:8200
+      POLL_INTERVAL: 10
+    depends_on:
+      - aggregator_backend
+    networks:
+      - vpp_network
+    volumes:
+      - ./config:/config:ro
+
+  # ===========================================
+  # LAYER 3: GRID INTEGRATION
+  # ===========================================
+
+  layer3_regional:
+    build:
+      context: ./layer3_grid_integration
+      dockerfile: Dockerfile
+    container_name: vpp_layer3_regional
+    ports:
+      - "8200:8200"
+    environment:
+      REGION_ID: REGION_WESTERN
+      MODE: simulation
+      LAYER4_URL: http://layer4_market:8300
+      PMU_ENABLED: false
+      SCADA_ENABLED: false
+      FREQUENCY_RESPONSE_ENABLED: true
+    depends_on:
+      - aggregator_backend
+    networks:
+      - vpp_network
+    volumes:
+      - ./config:/config:ro
+
+  # ===========================================
+  # LAYER 4: MARKET & COMPLIANCE
+  # ===========================================
+
+  layer4_market:
+    build:
+      context: ./layer4_market_compliance
+      dockerfile: Dockerfile
+    container_name: vpp_layer4_market
+    ports:
+      - "8300:8300"
+    environment:
+      MARKET_ENABLED: false
+      IEX_API_KEY: ${IEX_API_KEY}
+      PXIL_API_KEY: ${PXIL_API_KEY}
+      COMPLIANCE_ENABLED: true
+    depends_on:
+      - mongodb
+      - aggregator_backend
+    networks:
+      - vpp_network
+    volumes:
+      - ./config:/config:ro
+      - compliance_data:/data/compliance
+
+  # ===========================================
+  # CORE SERVICES
+  # ===========================================
+
+  # Express.js Backend (Aggregator Core)
+  aggregator_backend:
+    build:
+      context: ./backend_express
+      dockerfile: Dockerfile
+    container_name: vpp_aggregator
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      PORT: 3000
+      WS_PORT: 3001
+      NODE_ENV: development
+      MONGODB_URI: mongodb://mongodb:27017/vpp_platform
+      MONGODB_DB_NAME: vpp_platform
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MQTT_BROKER_URL: mqtt://mqtt_broker:1883
+      CORS_ORIGIN: http://localhost:5173
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      AUTH0_ISSUER: ${AUTH0_ISSUER}
+    depends_on:
+      - mongodb
+      - redis
+      - mqtt_broker
+    volumes:
+      - ./backend_express:/app
+      - /app/node_modules
+    networks:
+      - vpp_network
+
+  # ML Pipeline
+  ml_pipeline:
+    build:
+      context: ./ml_pipeline
+      dockerfile: Dockerfile
+    container_name: vpp_ml_pipeline
+    ports:
+      - "8080:8000"
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/vpp_platform
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AGGREGATOR_URL: http://aggregator_backend:3000
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+      - aggregator_backend
+    volumes:
+      - ./ml_pipeline:/app
+      - ml_models:/app/models
+    networks:
+      - vpp_network
+
+  # Data Layer Service
+  data_layer:
+    build:
+      context: ./data_layer_service
+      dockerfile: Dockerfile
+    container_name: vpp_data_layer
+    ports:
+      - "8090:8000"
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/vpp_platform
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./data_layer_service:/app
+    networks:
+      - vpp_network
+
+  # ===========================================
+  # USER INTERFACES
+  # ===========================================
+
+  # Web Dashboard
+  web_dashboard:
+    build:
+      context: ./web_dashboard
+      dockerfile: Dockerfile.dev
+    container_name: vpp_web_dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_WS_URL: ws://localhost:3001
+      VITE_AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+      VITE_AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID}
+      VITE_AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+    volumes:
+      - ./web_dashboard:/app
+      - /app/node_modules
+    depends_on:
+      - aggregator_backend
+    networks:
+      - vpp_network
+
+  # Vendor Portal
+  vendor_portal:
+    build:
+      context: ./vendor_portal
+      dockerfile: Dockerfile.dev
+    container_name: vpp_vendor_portal
+    ports:
+      - "5174:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+    volumes:
+      - ./vendor_portal:/app
+      - /app/node_modules
+    depends_on:
+      - aggregator_backend
+    networks:
+      - vpp_network
+
+networks:
+  vpp_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  mqtt_data:
+  mqtt_logs:
+  ml_models:
+  compliance_data:
